@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ברכת המזון</title>
+<meta name="description" content="ברכת המזון בנוסח עדות המזרח, עם תוספות לפי התאריך">
+<meta name="theme-color" content="#f3ead8" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#16120d" media="(prefers-color-scheme: dark)">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="stylesheet" href="style.css">
+<script type="module" src="app.js"></script>
+</head>
+<body>
+<header class="bar">
+  <button class="day" id="day" aria-haspopup="dialog">
+    <span class="hdate" id="hdate"></span>
+    <span class="chips" id="chips"></span>
+  </button>
+</header>
+
+<main id="text" class="text"></main>
+
+<nav class="tools" aria-label="כלים">
+  <button id="smaller" aria-label="הקטן גופן">א−</button>
+  <button id="larger" aria-label="הגדל גופן">א+</button>
+  <button id="settingsBtn" aria-label="הגדרות">⚙</button>
+</nav>
+
+<dialog id="settings">
+  <form method="dialog" class="sheet">
+    <h2>הגדרות</h2>
+
+    <fieldset>
+      <legend>היום</legend>
+      <label class="row">סוג היום
+        <select id="dayMode"></select>
+      </label>
+      <label class="row" id="alsoShabbatRow" hidden><input type="checkbox" id="alsoShabbat"> וגם שבת</label>
+      <p class="hint" id="autoHint"></p>
+      <label class="row"><input type="checkbox" id="walled"> ירושלים (פורים ביום ט״ו)</label>
+      <label class="row"><input type="checkbox" id="diaspora"> חוץ לארץ (יום טוב שני)</label>
+      <button type="button" id="locate" class="link">עדכן שקיעה לפי המיקום שלי</button>
+    </fieldset>
+
+    <fieldset>
+      <legend>הסעודה</legend>
+      <label class="row">זימון
+        <select id="zimun">
+          <option value="none">בלי זימון</option>
+          <option value="main">הב לן ונבריך</option>
+          <option value="alt">ברשותכם</option>
+          <option value="morocco">מנהג מרוקו</option>
+        </select>
+      </label>
+      <label class="row"><input type="checkbox" id="ten"> בעשרה (אלהינו)</label>
+      <label class="row">סעודה
+        <select id="meal">
+          <option value="none">רגילה</option>
+          <option value="wedding">סעודת חתן</option>
+          <option value="brit">סעודת ברית מילה</option>
+        </select>
+      </label>
+      <label class="row"><input type="checkbox" id="guest"> ברכת האורח</label>
+      <label class="row"><input type="checkbox" id="lshem"> הכנות ולשם יחוד</label>
+    </fieldset>
+
+    <fieldset>
+      <legend>תצוגה</legend>
+      <label class="row">כתב
+        <select id="font">
+          <option value="sefarad">סת״ם ספרדי</option>
+          <option value="ari">סת״ם אר״י</option>
+          <option value="ashkenaz">סת״ם אשכנזי</option>
+          <option value="frank">פרנק רוהל (דפוס)</option>
+        </select>
+      </label>
+      <label class="row">ערכת צבע
+        <select id="theme">
+          <option value="auto">לפי המכשיר</option>
+          <option value="light">בהיר</option>
+          <option value="dark">כהה</option>
+        </select>
+      </label>
+      <label class="row"><input type="checkbox" id="showAll"> הצג את כל התוספות (גם שלא היום)</label>
+    </fieldset>
+
+    <button class="done" value="close">סגור</button>
+  </form>
+</dialog>
+</body>
+</html>
