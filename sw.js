@@ -1,5 +1,5 @@
 // Offline cache: serve everything from cache, refresh it in the background.
-const CACHE = 'bhm-v3';
+const CACHE = 'bhm-v4';
 const FILES = [
   './', 'index.html', 'style.css', 'app.js', 'text.js', 'calendar.js', 'manifest.webmanifest',
   'fonts/StamSefarad-nikud.woff2?v=2', 'fonts/StamAshkenaz-nikud.woff2?v=2', 'fonts/SchwarzStamAri-nikud.woff2?v=2', 'fonts/KeterYG-Medium.woff2', 'fonts/FrankRuehlCLM-Medium.woff2',
@@ -7,7 +7,7 @@ const FILES = [
 ];
 
 self.addEventListener('install', e => {
-  e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES)).then(() => self.skipWaiting()));
+  e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES.map(f => new Request(f, { cache: 'reload' })))).then(() => self.skipWaiting()));
 });
 
 self.addEventListener('activate', e => {
@@ -19,7 +19,7 @@ self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET') return;
   e.respondWith(caches.open(CACHE).then(async cache => {
     const hit = await cache.match(e.request, { ignoreSearch: true });
-    const fresh = fetch(e.request).then(r => { if (r.ok) cache.put(e.request, r.clone()); return r; }).catch(() => hit);
+    const fresh = fetch(e.request, { cache: 'no-cache' }).then(r => { if (r.ok) cache.put(e.request, r.clone()); return r; }).catch(() => hit);
     return hit || fresh;
   }));
 });
