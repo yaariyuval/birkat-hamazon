@@ -103,15 +103,58 @@ def tag(x, height, bt, base_y):
     return op(stem, circle(x, cy, r), pathops.PathOp.UNION)
 
 
+ARI_TAGS = None                                      # set in __main__: tagin shapes taken from the Ari font
+
+
+def ari_tag_shapes(ari_path):
+    """The Ari font's tagin, which the user finds the most faithful: the cluster of three from its ז and
+    the single tag from its ב, each as separate stems, in units of its letter body (x from the
+    cluster's centre, y from the head line)."""
+    A = TTFont(ari_path)
+    cm = A.getBestCmap()
+    abt = bounds(A, cm[ord('כ')])[3]
+    out = {}
+    for key, ch in (('triple', 'ז'), ('single', 'ב')):
+        g = glyph_path(A, cm[ord(ch)])
+        x0, y0, x1, y1 = g.bounds
+        cut = abt + 0.03 * abt
+        above = op(g, rect(x0 - 10, cut, x1 + 10, y1 + 10), pathops.PathOp.INTERSECTION)
+        stems = sorted(components(above), key=lambda c: c.bounds[0])
+        if key == 'single':                          # the tag, not the roof's curled-up corners
+            stems = [max(stems, key=lambda c: c.bounds[3])]
+        cx = (min(c.bounds[0] for c in stems) + max(c.bounds[2] for c in stems)) / 2
+        norm = []
+        for c in stems:
+            q = pathops.Path()
+            c.draw(TransformPen(q.getPen(), (1000 / abt, 0, 0, 1000 / abt, -cx * 1000 / abt, -abt * 1000 / abt)))
+            norm.append(q)
+        out[key] = norm
+    return out
+
+
 def add_tagin(p, ch, bt, x):
-    """Crisp tagin on the traced letter: three parallel stems centred on the head block (middle one
-    tallest), or one, each standing on the head's own surface."""
+    """Tagin on the traced letter, shaped like the Ari font's: straight stems centred on the head block,
+    each standing on the head's own (possibly sloping) surface."""
     u = bt / 1000
-    if ch in SINGLE_TAG:
-        return op(p, tag(x, TAG['single'], bt, surface(p, x, bt)), pathops.PathOp.UNION)
-    sp = TAG['spread'] * u
-    for dx, h in ((-sp, TAG['outer']), (0, TAG['mid']), (sp, TAG['outer'])):
-        p = op(p, tag(x + dx, h, bt, surface(p, x + dx, bt)), pathops.PathOp.UNION)
+    stems = ARI_TAGS['single' if ch in SINGLE_TAG else 'triple']
+    # fit the cluster onto the head block it stands on (the siddur's heads are narrower than Ari's)
+    band = op(p, rect(x - 400 * u, bt - 60 * u, x + 400 * u, bt - 20 * u), pathops.PathOp.INTERSECTION)
+    head = next((c.bounds for c in components(band) if c.bounds[0] - 5 <= x <= c.bounds[2] + 5), None)
+    spread = 1.0
+    if head and len(stems) > 1:
+        cw = (stems[-1].bounds[2] - stems[0].bounds[0]) * u
+        spread = min(1.0, 0.95 * (head[2] - head[0]) / cw)
+    for st in stems:
+        c0 = (st.bounds[0] + st.bounds[2]) / 2 * u
+        sx = x + c0 * spread
+        surf = surface(p, sx, bt)
+        surf = surf if surf > bt - 150 * u else bt   # (off the head: keep to the head line)
+        q = pathops.Path()
+        st.draw(TransformPen(q.getPen(), (u, 0, 0, u, sx - c0, surf)))
+        b0 = q.bounds
+        base = op(q, rect(b0[0] - 10, b0[1] - 10, b0[2] + 10, b0[1] + 25 * u), pathops.PathOp.INTERSECTION).bounds
+        foot = rect(base[0], surf - 40 * u, base[2], b0[1] + 2)   # the stem reaches down into the head
+        p = op(op(p, q, pathops.PathOp.UNION), foot, pathops.PathOp.UNION)
     return p
 
 
@@ -186,7 +229,9 @@ def traced_letters(T, glyphs_json):
 
 
 # ── dagesh placement: the centre of the letter's largest open area (as the siddur prints it) ──
-COUNTER_LETTERS = 'בגדהחטכךלמםסעפףצץקשת'
+COUNTER_LETTERS = 'בדהחטכךלמםסעפףצץקשת'
+# letters whose dagesh stands beside the stem: (height as a fraction of the body, gap)
+STEM_DAGESH = {'ו': (0.5, 0.08), 'ז': (0.6, 0.06), 'ג': (0.55, 0.06), 'נ': (0.55, 0.06), 'י': (0.6, 0.06)}
 
 
 class _Flatten:
@@ -402,6 +447,13 @@ def add_nikud(T, F, cap=False):
         if not tname or not bounds(T, tname):
             continue
         pt = getattr(T, 'dagesh_at', {}).get(tname)
+        if pt is None and chr(cp) in STEM_DAGESH:
+            # beside the stem, clear of it (the dot's radius plus a gap), at mid height
+            h, gap = STEM_DAGESH[chr(cp)]
+            row = op(glyph_path(T, tname), rect(-10000, h * body_top - 2, 10000, h * body_top + 2),
+                     pathops.PathOp.INTERSECTION)
+            if row.bounds:
+                pt = (row.bounds[0] - (db[2] - db[0]) / 2 - gap * body_top, h * body_top)
         if pt is None and chr(cp) in COUNTER_LETTERS:
             pt = counter_centre(T, tname, body_top)
         if pt is None:
@@ -529,6 +581,7 @@ def save(T, name, family):
 
 if __name__ == '__main__':
     culmus, ari = Path(sys.argv[1]), sys.argv[2]
+    ARI_TAGS = ari_tag_shapes(ari)
     F = TTFont(culmus / 'FrankRuehlCLM-Medium.otf')
 
     T = TTFont(culmus / 'StamAshkenazCLM.ttf')        # metrics donor; every letter is replaced
@@ -539,7 +592,7 @@ if __name__ == '__main__':
     for src, out, family in ((culmus / 'StamSefaradCLM.ttf', 'StamSefarad-nikud.woff2', 'Stam Sefarad Nikud'),
                              (culmus / 'StamAshkenazCLM.ttf', 'StamAshkenaz-nikud.woff2', 'Stam Ashkenaz Nikud'),
                              (ari, 'SchwarzStamAri-nikud.woff2', 'Schwarz Stam Ari Nikud')):
-        T = TTFont(src); add_nikud(T, F); add_he_pieces(T); save(T, out, family)
+        T = TTFont(src); add_nikud(T, F, cap=True); add_he_pieces(T); save(T, out, family)
 
     for src, out, family in ((culmus / 'KeterYG-Medium.ttf', 'KeterYG-Medium.woff2', 'Keter YG'),
                              (culmus / 'FrankRuehlCLM-Medium.otf', 'FrankRuehlCLM-Medium.woff2', 'Frank Ruehl CLM')):
