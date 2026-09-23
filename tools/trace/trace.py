@@ -166,6 +166,10 @@ def straighten_top(ink, xa, xb, top, body):
         return ink
     xs = np.arange(xa, xb + 1)[ok]
     ys = tops[ok]
+    flat = np.abs(ys - np.median(ys)) < 0.06 * body * UP   # drop rounded corners and the letter's edges
+    xs, ys = xs[flat], ys[flat]
+    if len(xs) < 6:
+        return ink
     e = max(2, len(xs) // 6)                         # the outer sixth at each end: clear of the stems
     ends = np.r_[0:e, len(xs) - e:len(xs)]
     k, c = np.polyfit(xs[ends], ys[ends], 1)

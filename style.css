@@ -1,10 +1,10 @@
 /* STAM letters + Frank Ruehl vowels (+ pieces of ה at U+E000–E002), built by tools/build-fonts.py */
-@font-face { font-family: 'Stam Siddur'; src: url(fonts/StamSiddur-nikud.woff2?v=11) format('woff2'); font-display: block; }
-@font-face { font-family: 'Stam Sefarad'; src: url(fonts/StamSefarad-nikud.woff2?v=11) format('woff2'); font-display: block; }
-@font-face { font-family: 'Stam Ashkenaz'; src: url(fonts/StamAshkenaz-nikud.woff2?v=11) format('woff2'); font-display: block; }
-@font-face { font-family: 'Schwarz Ari'; src: url(fonts/SchwarzStamAri-nikud.woff2?v=11) format('woff2'); font-display: block; size-adjust: 82%; }
-@font-face { font-family: 'Keter YG'; src: url(fonts/KeterYG-Medium.woff2?v=11) format('woff2'); font-display: block; }
-@font-face { font-family: 'Frank Ruehl'; src: url(fonts/FrankRuehlCLM-Medium.woff2?v=11) format('woff2'); font-display: block; }
+@font-face { font-family: 'Stam Siddur'; src: url(fonts/StamSiddur-nikud.woff2?v=13) format('woff2'); font-display: block; }
+@font-face { font-family: 'Stam Sefarad'; src: url(fonts/StamSefarad-nikud.woff2?v=13) format('woff2'); font-display: block; }
+@font-face { font-family: 'Stam Ashkenaz'; src: url(fonts/StamAshkenaz-nikud.woff2?v=13) format('woff2'); font-display: block; }
+@font-face { font-family: 'Schwarz Ari'; src: url(fonts/SchwarzStamAri-nikud.woff2?v=13) format('woff2'); font-display: block; size-adjust: 82%; }
+@font-face { font-family: 'Keter YG'; src: url(fonts/KeterYG-Medium.woff2?v=13) format('woff2'); font-display: block; }
+@font-face { font-family: 'Frank Ruehl'; src: url(fonts/FrankRuehlCLM-Medium.woff2?v=13) format('woff2'); font-display: block; }
 
 :root {
   --bg: #f3ead8;
@@ -118,7 +118,8 @@ button, select, input { font: inherit; color: inherit; }
 .nm-mid > * { grid-area: 1 / 1; }
 .nm-roof { overflow: hidden; white-space: nowrap; contain: inline-size; }
 .nm-adni {                                             /* on the baseline, under the long roof */
-  font-family: var(--text-font); font-size: .42em; line-height: 1;
+  direction: rtl; unicode-bidi: bidi-override;           /* the private-use letters are LTR by default */
+  font-family: var(--text-font); font-size: .5em; line-height: 1;
   padding: 0 .12em;
 }
 /* notes after the names: יאהדונהי in the text font at half size, two-line notes in small bold print */

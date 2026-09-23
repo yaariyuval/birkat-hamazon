@@ -26,7 +26,7 @@ SPACING = [0x05BE, 0x05C3, 0x05F3, 0x05F4]
 BASES = [*range(0x05D0, 0x05EB), *range(0xFB1D, 0xFB50)]
 OUT = Path(__file__).resolve().parent.parent / 'fonts'
 UNICODES = [*range(0x20, 0x7F), 0xA0, *range(0x05B0, 0x05C8), *range(0x05D0, 0x05F5), *range(0x2010, 0x2028),
-            0x25CC, *range(0xFB1D, 0xFB50), 0xE000, 0xE001, 0xE002]
+            0x25CC, *range(0xFB1D, 0xFB50), 0xE000, 0xE001, 0xE002, *range(0xE010, 0xE014)]
 
 
 # ── outline helpers ──
@@ -83,7 +83,7 @@ TRIPLE_TAGIN = 'שעטנזגצץן'
 SINGLE_TAG = 'בדקחיה'
 # Proportions measured on the traced letters (letter body = 1000): ball tops 470 (middle) and 320
 # (outer; single 300) above the head line, balls 145 across, thin straight parallel stems 150 apart.
-TAG = dict(mid=490, outer=380, single=310, ball=165, stem=32, spread=155)
+TAG = dict(mid=490, outer=380, single=270, ball=165, stem=32, spread=155)
 
 
 def surface(p, x, bt):
@@ -155,6 +155,8 @@ def traced_letters(T, glyphs_json):
             pen.closePath()
         paths[ch] = pathops.simplify(p, fix_winding=True, keep_starting_points=False)
 
+    untagged = {ch: paths[ch] for ch in 'אדני'}
+
     for ch in TRIPLE_TAGIN + SINGLE_TAG:
         if 'tag_x' in glyphs.get(ch, {}):
             paths[ch] = add_tagin(paths[ch], ch, bt, glyphs[ch]['tag_x'] * k)
@@ -162,6 +164,12 @@ def traced_letters(T, glyphs_json):
     for ch, p in paths.items():
         x0, y0, x1, y1 = p.bounds
         set_glyph(T, cm[ord(ch)], p, x1 - x0 + 2 * side, dx=side - x0)
+    T.plain_adni = {}
+    for ch, p in untagged.items():
+        x0, y0, x1, y1 = p.bounds
+        name = f'plain.{cm[ord(ch)]}'
+        set_glyph(T, name, p, x1 - x0 + 2 * side, dx=side - x0)
+        T.plain_adni[ch] = name
 
     # dagesh beside the stem of ו (the shuruk) and ז, at the siddur's height
     T.dagesh_at = {}
@@ -284,6 +292,10 @@ def add_nikud(T, F, cap=False):
         b = bounds(T, name)
         if b and cap and chr(cp) not in 'ל':
             b = (b[0], b[1], b[2], min(b[3], body_top))
+        if b and cap and chr(cp) == 'ע':
+            # ע's tail dips below the line and reaches left: marks go under the body, as printed
+            arms = op(glyph_path(T, name), rect(-10000, 0.4 * body_top, 10000, body_top), pathops.PathOp.INTERSECTION)
+            b = (arms.bounds[0], 0, arms.bounds[2], b[3])
         return b
 
     # the first MarkBase lookup that positions each of Frank's default mark glyphs
@@ -342,6 +354,16 @@ def add_nikud(T, F, cap=False):
     dmx, dmy = (v * s for v in lookups[di]['marks'][fcmap[0x05BC]])
     fea.append(f'markClass [{mark_names[0x05BC]}] <anchor {round(dc[0])} {round(dc[1])}> @DAGESH;')
     base_names = set()
+    missing = []
+    # where each lookup puts its marks, as a fraction of the base's height (median over Frank's letters)
+    typical_y = {}
+    for i in set(mark_lookup.values()):
+        fr = []
+        for g, (ax, ay) in lookups[i]['bases'].items():
+            fb2 = bounds(F, g)
+            if fb2 and fb2[3] > fb2[1]:
+                fr.append((ay - fb2[1]) / (fb2[3] - fb2[1]))
+        typical_y[i] = sorted(fr)[len(fr) // 2] if fr else 0
     fea.append('feature mark {')
     for i in sorted(set(mark_lookup.values())):
         fea.append(f'  lookup L{i} {{')
@@ -353,12 +375,17 @@ def add_nikud(T, F, cap=False):
             if fname not in lookups[i]['bases']:          # fall back to the undecorated letter
                 dec = unicodedata.decomposition(chr(cp)).split()
                 fname = fcmap.get(int(dec[0], 16)) if dec else None
-            if fname not in lookups[i]['bases']:
-                continue
             tbox = box(tname, cp)
             if tbox is None:
                 continue
-            x, y = map_anchor(*lookups[i]['bases'][fname], bounds(F, fname), tbox)
+            if fname not in lookups[i]['bases']:
+                # Frank has no anchor for this letter (e.g. marks under ע): use the lookup's typical
+                # placement — centred, just below the baseline or just above the top
+                x = round((tbox[0] + tbox[2]) / 2)
+                y = round(tbox[1] + typical_y[i] * (tbox[3] - tbox[1]))
+                missing.append(f'{chr(cp)}:{i}')
+            else:
+                x, y = map_anchor(*lookups[i]['bases'][fname], bounds(F, fname), tbox)
             if tname in getattr(T, 'holam_at', {}) and i == mark_lookup.get(0x05B9):
                 # put the holam dot's centre at the requested point
                 hb = bounds(T, mark_names[0x05B9])
@@ -404,6 +431,8 @@ def add_nikud(T, F, cap=False):
             fea.append(f'    pos base [{tname}] <anchor {round(x)} {round(top + 0.06 * h)}> mark @D{cp:X};')
             base_names.add(tname)
         fea.append(f'  }} D{cp:X};')
+    if missing:
+        print('  fallback anchors:', ' '.join(sorted(set(missing))))
     fea.append('} mark;')
     fea.append('table GDEF { GlyphClassDef [%s], , [%s], ; } GDEF;'
                % (' '.join(sorted(base_names)), ' '.join(sorted(set(mark_names.values())))))
@@ -422,25 +451,29 @@ def add_he_pieces(T):
     leg = min(components(g), key=lambda p: (p.bounds[2] - p.bounds[0]) * (p.bounds[3] - p.bounds[1]))
     cut = leg.bounds[2] + 0.05 * (x1 - x0)           # just right of the left leg: only roof above it
     upm = T['head'].unitsPerEm
-    # the roof's band: the ink in a slice through the middle of the roof (clear of the leg and tag)
-    xm = (cut + x1) / 2
-    bb, bt = op(g, rect(xm - 0.05 * (x1 - x0), y0 - 10, xm + 0.05 * (x1 - x0), y1 + 10),
-                pathops.PathOp.INTERSECTION).bounds[1::2]
-    bb = max(bb, bt - 0.2 * (y1 - y0))               # (the right stem hangs below the roof there)
-    ov = 0.02 * upm                                  # the ends overlap the extension: no visible joins
-    # both ends get a straight run of the same roof band, so the joins with the bar are seamless
-    run = 0.2 * (x1 - x0)
-    right = op(op(g, rect(cut, y0 - 10, x1 + 10, y1 + 10), pathops.PathOp.INTERSECTION),
-               rect(cut - ov, bb, cut + run, bt), pathops.PathOp.UNION)
+    # the roof's band where the bar joins (just right of the cut, clear of the leg and the tag)
+    w = x1 - x0
+    bb, bt = op(g, rect(cut + 0.02 * w, y0 - 10, cut + 0.08 * w, y1 + 10), pathops.PathOp.INTERSECTION).bounds[1::2]
+    bb = max(bb, bt - 0.2 * (y1 - y0))
+    ov = 0.02 * upm                                  # the ends overlap the bar: no visible joins
+    run = 0.2 * w
+    # right piece: its roof next to the join is exactly the band, so the bar continues it evenly
+    right = op(g, rect(cut, y0 - 10, x1 + 10, y1 + 10), pathops.PathOp.INTERSECTION)
+    right = op(right, rect(cut - 10, y0 - 10, cut + run, y1 + 10), pathops.PathOp.DIFFERENCE)
+    right = op(right, rect(cut - ov, bb, cut + run + 2, bt), pathops.PathOp.UNION)
     left = op(op(g, rect(x0 - 10, y0 - 10, cut, y1 + 10), pathops.PathOp.INTERSECTION),
-              rect(cut - run, bb, cut + ov, bt), pathops.PathOp.UNION)
+              rect(cut - 0.03 * w, bb, cut + ov, bt), pathops.PathOp.UNION)
     seg = 3 * upm                                    # one long piece, clipped to width by CSS: no seams
     set_glyph(T, 'he.right', right, adv - cut, dx=-cut)
     set_glyph(T, 'he.left', left, cut)
     set_glyph(T, 'he.roof', rect(0, bb, seg, bt), seg)
+    # the small אדני written inside the stretched ה: plain letters (no tagin) at U+E010–E013
+    plain = getattr(T, 'plain_adni', {})
+    cm = T.getBestCmap()
+    extra = {0xE010 + i: plain.get(ch, cm[ord(ch)]) for i, ch in enumerate('אדני')}
     for table in T['cmap'].tables:
         if table.isUnicode():
-            table.cmap.update({0xE000: 'he.right', 0xE001: 'he.left', 0xE002: 'he.roof'})
+            table.cmap.update({0xE000: 'he.right', 0xE001: 'he.left', 0xE002: 'he.roof', **extra})
 
 
 def to_glyf(path):
