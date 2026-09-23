@@ -3,7 +3,8 @@
 For each letter in picks.json: take its ink component(s) from the photo (plus legs that print as
 separate pieces, e.g. ה), measure the line's baseline and letter-body height from the neighbouring
 letters, upsample 4x, threshold and vectorise with potrace. Coordinates are written in units where
-the baseline is y=0 and the letter body (top line to baseline) is 1000 high.
+the baseline is y=0 and the letter body (top line to baseline) is 1000 high. The printed tagin are
+separated from the letters: the build redraws them crisply at `tag_x` (they print too thin to trace).
 
 Usage: python trace.py <photo-dir> [sheet.png]      (needs numpy, scikit-image, pillow, potracer)
 """
@@ -68,6 +69,8 @@ def extract(g, lab, props, labels):
     t = threshold_otsu(big[bigmask]) if bigmask.any() else threshold_otsu(big)
     ink = (big < t) & bigmask
     ink = binary_closing(binary_opening(ink, iterations=3), iterations=3)   # tagin are redrawn, so smooth freely
+    from skimage.morphology import remove_small_holes
+    ink = remove_small_holes(ink, max_size=int((0.08 * body * UP) ** 2))  # paper grain inside strokes
     return ink, (X0, Y0), base, body
 
 
@@ -101,6 +104,79 @@ def own_metrics(ch, ink, origin, base, body):
     return Y0 + bot / UP, (bot - top) / UP
 
 
+TRIPLE = set('שעטנזגצץן')
+SINGLE = set('בדקחיה')
+
+
+def split_tagin(ch, ink, origin, base, body):
+    """Separate the printed tagin from the letter: the thin stems are removed by a morphological
+    opening, the balls then float free above the head and are dropped. The letter keeps its heads
+    exactly as printed (e.g. ט's sloping head). Returns (body_ink, tag_x): tag_x is where the tagin
+    stand, in px of the crop — for a cluster of three, the centre of the head block beneath it
+    (the siddur centres the cluster on its head); for a single tag, the stem itself."""
+    from scipy.ndimage import binary_opening, binary_dilation, label as nd_label
+    from skimage.morphology import disk
+    if ch not in TRIPLE | SINGLE:
+        return ink, None
+    X0, Y0 = origin
+    top = int(round((base - body - Y0) * UP))         # head line, px in the crop
+    r = max(2, int(0.035 * body * UP))               # wider than a stem, narrower than a head
+    opened = binary_opening(ink, structure=disk(r))
+    lab, n = nd_label(opened)
+    keep = np.zeros_like(ink)
+    for i in range(1, n + 1):
+        ys = np.nonzero((lab == i).any(axis=1))[0]
+        if ys[-1] > top + 0.12 * body * UP:          # reaches down into the letter: body, not a ball
+            keep |= lab == i
+    body_ink = ink & binary_dilation(keep, structure=disk(3))      # (tight: no stubs of the old stems)
+    body_ink[top + int(0.04 * body * UP):] = ink[top + int(0.04 * body * UP):]   # below the head line: untouched
+    tags = ink & ~body_ink
+    tags[top + int(0.05 * body * UP):] = False       # (only what stands above the head)
+    ty, tx = np.nonzero(tags)
+    if len(tx) == 0:
+        return body_ink, None
+    if ch in SINGLE:
+        stem_rows = ty > ty.min() + 0.5 * (ty.max() - ty.min())
+        x = float(np.median(tx[stem_rows]))
+        w = int(0.14 * body * UP)
+        return straighten_top(body_ink, int(x) - w, int(x) + w, top, body), x
+    guess = float(np.median(tx))
+    band = body_ink[top:top + int(0.12 * body * UP)]
+    blab, bn = nd_label(band)
+    best = None
+    for i in range(1, bn + 1):
+        xs = np.nonzero((blab == i).any(axis=0))[0]
+        d = 0 if xs[0] <= guess <= xs[-1] else min(abs(xs[0] - guess), abs(xs[-1] - guess))
+        if best is None or d < best[0]:
+            best = (d, (xs[0] + xs[-1]) / 2, (int(xs[0]), int(xs[-1])))
+    if not best:
+        return body_ink, guess
+    x0b, x1b = best[2]
+    return straighten_top(body_ink, x0b, x1b, top, body), float(best[1])
+
+
+def straighten_top(ink, xa, xb, top, body):
+    """Give the head between columns xa..xb a clean straight top edge through its two ends (keeping
+    any slope, as on ט), removing the stubs left where the printed stems were cut off."""
+    xa, xb = max(0, xa), min(ink.shape[1] - 1, xb)
+    lim = top + int(0.25 * body * UP)
+    tops = np.array([np.argmax(ink[:lim, x]) if ink[:lim, x].any() else -1 for x in range(xa, xb + 1)])
+    ok = tops >= 0
+    if ok.sum() < 6:
+        return ink
+    xs = np.arange(xa, xb + 1)[ok]
+    ys = tops[ok]
+    e = max(2, len(xs) // 6)                         # the outer sixth at each end: clear of the stems
+    ends = np.r_[0:e, len(xs) - e:len(xs)]
+    k, c = np.polyfit(xs[ends], ys[ends], 1)
+    out = ink.copy()
+    for x, y in zip(xs, ys):
+        line = int(round(k * x + c))
+        out[:line, x] = False
+        out[line:max(line, y) + 1, x] = True        # (fill small dents too)
+    return out
+
+
 def vectorise(ink, origin, base, body):
     """potrace → contours in body units (y up, baseline 0, body height 1000)."""
     X0, Y0 = origin
@@ -130,7 +206,10 @@ def main():
         g, lab, props = load(photo_dir, n)
         ink, origin, base, body = extract(g, lab, props, labels)
         base, body = own_metrics(ch, ink, origin, base, body)
-        glyphs[ch] = vectorise(ink, origin, base, body)
+        ink, tag_x = split_tagin(ch, ink, origin, base, body)
+        glyphs[ch] = {'outline': vectorise(ink, origin, base, body)}
+        if tag_x is not None:
+            glyphs[ch]['tag_x'] = round(tag_x * 1000 / (body * UP), 1)   # same units as the outline
         tile = Image.fromarray(((~ink) * 255).astype(np.uint8)).convert('RGB')
         d = ImageDraw.Draw(tile)
         by = (base - origin[1]) * UP

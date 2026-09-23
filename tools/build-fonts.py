@@ -83,43 +83,36 @@ TRIPLE_TAGIN = 'שעטנזגצץן'
 SINGLE_TAG = 'בדקחיה'
 # Proportions measured on the traced letters (letter body = 1000): ball tops 470 (middle) and 320
 # (outer; single 300) above the head line, balls 145 across, thin straight parallel stems 150 apart.
-TAG = dict(mid=480, outer=370, single=300, ball=145, stem=30, spread=150, base_spread=1.0)
+TAG = dict(mid=490, outer=380, single=310, ball=165, stem=32, spread=155)
 
 
-def tag(x_base, x_ball, height, bt):
-    """One tag: a thin stem from inside the head up to a round ball (units scaled to body `bt`)."""
+def surface(p, x, bt):
+    """Top of the letter's head at x (its printed surface, which may slope, as on ט)."""
+    u = bt / 1000
+    col = op(p, rect(x - 8 * u, -10000, x + 8 * u, bt + 250 * u), pathops.PathOp.INTERSECTION)
+    return col.bounds[3] if col.bounds else bt
+
+
+def tag(x, height, bt, base_y):
+    """One tag: a thin straight stem from inside the head (below `base_y`) up to a round ball."""
     u = bt / 1000
     r = TAG['ball'] * u / 2
     cy = bt + height * u - r
     w = TAG['stem'] * u / 2
-    stem = pathops.Path()
-    pen = stem.getPen()
-    b = bt - 40 * u
-    pen.moveTo((x_base - w, b)); pen.lineTo((x_base + w, b))
-    pen.lineTo((x_ball + w, cy)); pen.lineTo((x_ball - w, cy)); pen.closePath()
-    return op(stem, circle(x_ball, cy, r), pathops.PathOp.UNION)
+    stem = rect(x - w, base_y - 40 * u, x + w, cy)
+    return op(stem, circle(x, cy, r), pathops.PathOp.UNION)
 
 
-def clean_tagin(p, ch, bt):
-    """Replace the traced tagin (thin, often broken in the photos) with crisp ones at the same place."""
+def add_tagin(p, ch, bt, x):
+    """Crisp tagin on the traced letter: three parallel stems centred on the head block (middle one
+    tallest), or one, each standing on the head's own surface."""
     u = bt / 1000
-    x0, y0, x1, y1 = p.bounds
-    above = op(p, rect(x0 - 10, bt + 30 * u, x1 + 10, y1 + 10), pathops.PathOp.INTERSECTION)
-    comps = [c.bounds for c in components(above) if c.bounds[2] - c.bounds[0] < 200 * u]   # not ח's peak
-    if not comps:
-        return p
-    tallest = max(comps, key=lambda b: b[3])
-    cx = (tallest[0] + tallest[2]) / 2
-    if ch == 'ח':                                    # keep the peak: cut only around the tag
-        body = op(p, rect(cx - 110 * u, bt + 8 * u, cx + 110 * u, y1 + 10), pathops.PathOp.DIFFERENCE)
-    else:
-        body = op(p, rect(x0 - 10, y0 - 10, x1 + 10, bt + 8 * u), pathops.PathOp.INTERSECTION)
     if ch in SINGLE_TAG:
-        return op(body, tag(cx, cx, TAG['single'], bt), pathops.PathOp.UNION)
-    sp, bs = TAG['spread'] * u, TAG['spread'] * TAG['base_spread'] * u
-    for dx, dxb, h in ((-sp, -bs, TAG['outer']), (0, 0, TAG['mid']), (sp, bs, TAG['outer'])):
-        body = op(body, tag(cx + dxb, cx + dx, h, bt), pathops.PathOp.UNION)
-    return body
+        return op(p, tag(x, TAG['single'], bt, surface(p, x, bt)), pathops.PathOp.UNION)
+    sp = TAG['spread'] * u
+    for dx, h in ((-sp, TAG['outer']), (0, TAG['mid']), (sp, TAG['outer'])):
+        p = op(p, tag(x + dx, h, bt, surface(p, x + dx, bt)), pathops.PathOp.UNION)
+    return p
 
 
 def circle(cx, cy, r):
@@ -137,8 +130,7 @@ def circle(cx, cy, r):
 
 def traced_letters(T, glyphs_json):
     """Replace the letters with outlines traced from the siddur (tools/trace/glyphs.json: baseline 0,
-    letter body 1000 high), scaled to this font's letter height. ף, which the photos lack, is built
-    from the traced פ and the tail of ן. Sets T.dagesh_at for the letters whose dagesh sits beside
+    letter body 1000 high), scaled to this font's letter height. Sets T.dagesh_at for the letters whose dagesh sits beside
     the stem (ו, ז), as the siddur prints it."""
     import json
     glyphs = json.loads(Path(glyphs_json).read_text())
@@ -147,7 +139,8 @@ def traced_letters(T, glyphs_json):
     bt = 1000 * k
     side = 0.055 * bt                                # side bearing (the siddur sets letters close)
     paths = {}
-    for ch, contours in glyphs.items():
+    for ch, g in glyphs.items():
+        contours = g['outline']
         p = pathops.Path()
         pen = p.getPen()
         for c in contours:
@@ -162,18 +155,9 @@ def traced_letters(T, glyphs_json):
             pen.closePath()
         paths[ch] = pathops.simplify(p, fix_winding=True, keep_starting_points=False)
 
-    # ף: the head of פ (above a third of the body) + the descending tail of ן, right edges aligned
-    pe, nun = paths['פ'], paths['ן']
-    px0, py0, px1, py1 = pe.bounds
-    head = op(pe, rect(px0 - 10, 0.33 * bt, px1 + 10, py1 + 10), pathops.PathOp.INTERSECTION)
-    nx0, ny0, nx1, ny1 = nun.bounds
-    tail = op(nun, rect(nx0 - 10, ny0 - 10, nx1 + 10, 0.5 * bt), pathops.PathOp.INTERSECTION)
-    moved = pathops.Path()
-    tail.draw(TransformPen(moved.getPen(), (1, 0, 0, 1, px1 - nx1, 0)))
-    paths['ף'] = op(head, moved, pathops.PathOp.UNION)
-
     for ch in TRIPLE_TAGIN + SINGLE_TAG:
-        paths[ch] = clean_tagin(paths[ch], ch, bt)
+        if 'tag_x' in glyphs.get(ch, {}):
+            paths[ch] = add_tagin(paths[ch], ch, bt, glyphs[ch]['tag_x'] * k)
 
     for ch, p in paths.items():
         x0, y0, x1, y1 = p.bounds
