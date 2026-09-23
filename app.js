@@ -199,8 +199,32 @@ function bind() {
     S.loc = { lat: p.coords.latitude, lon: p.coords.longitude }; save(); render();
     $('locate').textContent = 'המיקום עודכן ✓';
   }, () => { $('locate').textContent = 'לא התקבלה הרשאת מיקום'; });
+  $('installGo').onclick = install;
+  $('installBtn').onclick = install;
+  $('installX').onclick = () => { try { localStorage.setItem('bhm-install-x', '1'); } catch {} installUI(); };
   $('settings').addEventListener('click', e => { if (e.target === $('settings')) $('settings').close(); });
 }
+
+// ── install as an app (Chrome fires beforeinstallprompt when the page is installable) ──
+let installEvent = null;
+const standalone = () => matchMedia('(display-mode: standalone)').matches;
+const dismissed = () => { try { return localStorage.getItem('bhm-install-x') === '1'; } catch { return false; } };
+function installUI() {
+  $('installBar').hidden = !installEvent || standalone() || dismissed();
+  $('installBtn').hidden = !installEvent;
+  $('installHint').textContent = standalone()
+    ? 'האפליקציה מותקנת ✓'
+    : installEvent ? ''
+    : 'אם אין כפתור התקנה: פתחו את הקישור בדפדפן כרום עצמו (לא מתוך וואטסאפ, מייל וכו׳ — שם בוחרים ⋮ ← „פתיחה בכרום“), ואז בתפריט ⋮ בוחרים „התקנת אפליקציה“ או „הוספה למסך הבית“.';
+}
+async function install() {
+  if (!installEvent) return;
+  installEvent.prompt();
+  await installEvent.userChoice;
+  installEvent = null; installUI();
+}
+addEventListener('beforeinstallprompt', e => { e.preventDefault(); installEvent = e; installUI(); });
+addEventListener('appinstalled', () => { installEvent = null; installUI(); toast('הותקן ✓'); });
 
 let toastTimer;
 function toast(text) {
@@ -221,6 +245,7 @@ setInterval(tick, 60_000);
 
 applyLook();
 bind();
+installUI();
 lastKey = today().key;
 render();
 wake();

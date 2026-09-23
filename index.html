@@ -30,6 +30,10 @@
   <button id="settingsBtn" aria-label="הגדרות">⚙</button>
 </nav>
 <div class="toast" id="toast" role="status"></div>
+<div class="install-bar" id="installBar" hidden>
+  <button id="installGo">⬇ התקנה כאפליקציה</button>
+  <button id="installX" aria-label="סגור">✕</button>
+</div>
 
 <dialog id="settings">
   <form method="dialog" class="sheet">
@@ -90,6 +94,12 @@
         </select>
       </label>
       <label class="row"><input type="checkbox" id="showAll"> הצג את כל התוספות (גם שלא היום)</label>
+    </fieldset>
+
+    <fieldset id="installSection">
+      <legend>התקנה</legend>
+      <button type="button" class="link" id="installBtn" hidden>התקנה כאפליקציה בטלפון</button>
+      <p class="hint" id="installHint"></p>
     </fieldset>
 
     <button class="done" value="close">סגור</button>
