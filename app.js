@@ -82,6 +82,13 @@ function renderLine(line, f) {
       if (!test(p.w, f)) el.classList.add('off');
       bits.push(el); continue;
     }
+    if (p.ann) {                                                     // small note beside a divine name
+      const a = document.createElement('span');
+      a.className = 'ann' + (p.ann.length > 1 ? ' two' : '') + (p.sup ? ' sup' : '');
+      p.ann.forEach((t, i) => { if (i) a.append(document.createElement('br')); a.append(t); });
+      if (p.tight) a.dataset.tight = '';
+      bits.push(a); continue;
+    }
     if (p.lbl) {
       const l = document.createElement('span'); l.className = 'lbl'; l.textContent = p.lbl;
       if (!p.t) { bits.push(l); continue; }
@@ -101,7 +108,11 @@ function renderLine(line, f) {
     if (!on) el.className = 'off';
     bits.push(el);
   }
-  bits.forEach((b, i) => { if (i && !(b.nodeType === 3 && /^[.,:]/.test(b.data))) span.append(' '); span.append(b); });
+  bits.forEach((b, i) => {
+    const glued = b.dataset?.tight !== undefined || /^[.,:]/.test(b.textContent);
+    if (i && !glued) span.append(' ');
+    span.append(b);
+  });
   return span;
 }
 

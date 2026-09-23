@@ -27,6 +27,8 @@ export const CORRECTIONS = [
   ['יַגִּיעֵנוּ', 'יַגִּיעֵֽנוּ'],
 ];
 for (const [a, b] of CORRECTIONS) { if (!src.includes(a)) console.log('correction not found in source:', a); src = src.split(a).join(b); }
+// the siddur's לשם יחוד (transcribed from the user's photo)
+src += ' ' + readFileSync(new URL('../sources/siddur-lshem-yichud.txt', import.meta.url), 'utf8').replace(/^#.*$/gm, '').replace(/\s+/g, ' ');
 const norm = s => s.replace(/\s+/g, ' ').trim();
 
 const strings = [];

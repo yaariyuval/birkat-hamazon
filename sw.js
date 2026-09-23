@@ -1,5 +1,5 @@
 // Offline cache: serve everything from cache, refresh it in the background.
-const CACHE = 'bhm-v6';
+const CACHE = 'bhm-v7';
 const FILES = [
   './', 'index.html', 'style.css', 'app.js', 'text.js', 'calendar.js', 'manifest.webmanifest',
   'fonts/StamSefarad-nikud.woff2?v=2', 'fonts/StamAshkenaz-nikud.woff2?v=2', 'fonts/SchwarzStamAri-nikud.woff2?v=2', 'fonts/KeterYG-Medium.woff2', 'fonts/FrankRuehlCLM-Medium.woff2',

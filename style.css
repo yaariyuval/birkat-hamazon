@@ -109,6 +109,11 @@ button, select, input { font: inherit; color: inherit; }
 
 .big { font-size: 1.3em; line-height: 1; }
 
+/* small notes beside divine names (siddur's לשם יחוד) */
+.ann { font-family: 'Frank Ruehl', serif; font-size: 13px; line-height: 1.15; color: var(--muted); white-space: nowrap; }
+.ann.two { display: inline-block; vertical-align: middle; text-align: center; font-size: 11px; }
+.ann.sup { vertical-align: super; font-size: 10px; }
+
 /* ── כוונות האר״י ── */
 .kav, .kav-block {
   font-family: 'Frank Ruehl', serif; font-size: 15px; line-height: 1.55;
