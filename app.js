@@ -148,6 +148,12 @@ function bind() {
   for (const id of ['zimun', 'meal', 'font', 'theme']) $(id).onchange = e => { S[id] = e.target.value; save(); applyLook(); render(); };
   for (const id of ['ten', 'guest', 'lshem', 'showAll', 'walled', 'diaspora']) $(id).onchange = e => { S[id] = e.target.checked; save(); render(); };
   const resize = d => { S.size = Math.min(48, Math.max(16, S.size + d)); save(); applyLook(); };
+  $('fontBtn').onclick = () => {
+    const opts = [...$('font').options];
+    const next = opts[(opts.findIndex(o => o.value === S.font) + 1) % opts.length];
+    S.font = next.value; save(); applyLook();
+    toast(next.text);
+  };
   $('smaller').onclick = () => resize(-2);
   $('larger').onclick = () => resize(2);
   $('locate').onclick = () => navigator.geolocation?.getCurrentPosition(p => {
@@ -155,6 +161,12 @@ function bind() {
     $('locate').textContent = 'המיקום עודכן ✓';
   }, () => { $('locate').textContent = 'לא התקבלה הרשאת מיקום'; });
   $('settings').addEventListener('click', e => { if (e.target === $('settings')) $('settings').close(); });
+}
+
+let toastTimer;
+function toast(text) {
+  $('toast').textContent = text; $('toast').classList.add('show');
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => $('toast').classList.remove('show'), 1400);
 }
 
 // ── keep the screen on while reading ──

@@ -24,10 +24,12 @@
 <main id="text" class="text"></main>
 
 <nav class="tools" aria-label="כלים">
+  <button id="fontBtn" aria-label="החלף כתב">א</button>
   <button id="smaller" aria-label="הקטן גופן">א−</button>
   <button id="larger" aria-label="הגדל גופן">א+</button>
   <button id="settingsBtn" aria-label="הגדרות">⚙</button>
 </nav>
+<div class="toast" id="toast" role="status"></div>
 
 <dialog id="settings">
   <form method="dialog" class="sheet">
@@ -71,9 +73,10 @@
       <legend>תצוגה</legend>
       <label class="row">כתב
         <select id="font">
-          <option value="sefarad">סת״ם ספרדי</option>
-          <option value="ari">סת״ם אר״י</option>
-          <option value="ashkenaz">סת״ם אשכנזי</option>
+          <option value="sefarad">כתב אשורי (סת״ם ספרדי)</option>
+          <option value="ashkenaz">כתב אשורי (סת״ם אשכנזי)</option>
+          <option value="ari">כתב האר״י</option>
+          <option value="keter">כתר (דפוס מקראי)</option>
           <option value="frank">פרנק רוהל (דפוס)</option>
         </select>
       </label>
