@@ -67,7 +67,7 @@ function stretchedHe() {
   const he = document.createElement('span'); he.className = 'nm-he';
   const right = document.createElement('span'); right.textContent = '\uE000';
   const mid = document.createElement('span'); mid.className = 'nm-mid';
-  const roof = document.createElement('span'); roof.className = 'nm-roof'; roof.textContent = '\uE002'.repeat(24);
+  const roof = document.createElement('span'); roof.className = 'nm-roof'; roof.textContent = '\uE002';                 // one 3-em bar, clipped to the width of אדני
   const adni = document.createElement('span'); adni.className = 'nm-adni'; adni.textContent = 'אדני';
   const left = document.createElement('span'); left.textContent = '\uE001';
   mid.append(roof, adni); he.append(right, mid, left);
