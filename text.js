@@ -4,6 +4,7 @@
 // `w` names a flag from the day context (see app.js ctx()); a leading '!' negates.
 // `label` is the source's own instruction, shown only in "show all" mode.
 // `tov` marks a "(טוֹב)" that is said on yom tov and dropped on chol hamoed.
+// ⟦…⟧ inside a string enlarges those letters (ראשי/סופי תיבות, as printed in siddurim).
 
 const ten = { w: 'ten', t: 'אֱלֹהֵֽינוּ', label: 'בעשרה' };
 const wed = { w: 'wedding', t: 'שֶׁהַשִּׂמְחָה בִמְעוֹנוֹ', label: 'בסעודת חתן' };
@@ -108,7 +109,7 @@ export const TEXT = [
         { k: `באומרו פותח את ידיך, יכוין למה שכתבנו באשרי שאחר עמידה דיוצר דחול.`, src: PEC },
         { k: `ר"ת פותח את ידיך פא"י והוא שם א' מע"ב שמות דויסע ויבא ויט גם סודו הוא חיבור ב' שמות הויה ואדני יאהדונהי … גם ס"ת פותח את ידיך חת"ך והוא שם קדוש המכונה בספרי המקובלים שם הפרנסה. גם תכוין כי שם הנז' בחילוף אתב"ש הוא סא"ל`, src: SHK + ' יד' },
         { k: `וכונת שם חת"ך באשרי שקודם ובא לציון … אז הוא נגזר משם ההויה שהוא רחמים והיא הויה דע"ב`, src: SHK + ' טז' },
-        '"פּוֹתֵֽחַ אֶת־יָדֶֽךָ',
+        '"⟦פּ⟧וֹתֵֽ⟦חַ⟧ ⟦אֶת⟧־⟦יָ⟧דֶֽ⟦ךָ⟧',          // ר"ת פא"י, ס"ת חת"ך
         { k: `במלת ומשביע ג"כ תכוין שהוא בגימטריא חת"ך הנזכר`, src: SHK + ' יז' },
         'וּמַשְׂבִּיעַ לְכׇל־חַי רָצוֹן".',
       ],

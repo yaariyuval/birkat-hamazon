@@ -59,12 +59,23 @@ function kavanah(tag, text, src, f, dow) {
 
 function test(w, f) { return !w || (w[0] === '!' ? !f[w.slice(1)] : !!f[w]); }
 
+// "⟦פּ⟧וֹתֵֽ⟦חַ⟧" → enlarged letters (each ⟦…⟧ keeps a letter together with its vowels)
+function withBigLetters(str) {
+  if (!str.includes('⟦')) return document.createTextNode(str);
+  const frag = document.createDocumentFragment();
+  str.split(/(⟦[^⟧]*⟧)/).forEach(piece => {
+    if (!piece.startsWith('⟦')) { frag.append(piece); return; }
+    const b = document.createElement('span'); b.className = 'big'; b.textContent = piece.slice(1, -1); frag.append(b);
+  });
+  const wrap = document.createElement('span'); wrap.append(frag); return wrap;
+}
+
 function renderLine(line, f) {
   const span = document.createElement('span');
   const parts = typeof line === 'string' ? [line] : line;
   const bits = [];
   for (const p of parts) {
-    if (typeof p === 'string') { bits.push(document.createTextNode(p)); continue; }
+    if (typeof p === 'string') { bits.push(withBigLetters(p)); continue; }
     if (p.k) {
       if (!f.kav || (!test(p.w, f) && !S.showAll)) continue;
       const el = kavanah('span', p.k, p.src, f, p.dow);

@@ -31,7 +31,7 @@ const norm = s => s.replace(/\s+/g, ' ').trim();
 
 const strings = [];
 const walk = (x) => {
-  if (typeof x === 'string') { if (/[ְ-ׇ]/.test(x)) strings.push(x); return; }
+  if (typeof x === 'string') { x = x.replace(/[⟦⟧]/g, ''); if (/[ְ-ׇ]/.test(x)) strings.push(x); return; }
   if (Array.isArray(x)) return x.forEach(walk);
   if (x && typeof x === 'object') { if (x.t) walk(x.t); if (x.lines) walk(x.lines); if (x.items) walk(x.items); }
 };

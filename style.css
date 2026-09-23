@@ -107,6 +107,8 @@ button, select, input { font: inherit; color: inherit; }
 .off { opacity: .38; }
 .text .zimun > span { margin-bottom: .2em; }
 
+.big { font-size: 1.3em; line-height: 1; }
+
 /* ── כוונות האר״י ── */
 .kav, .kav-block {
   font-family: 'Frank Ruehl', serif; font-size: 15px; line-height: 1.55;
