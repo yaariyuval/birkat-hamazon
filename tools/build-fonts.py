@@ -1,7 +1,8 @@
 """Build the app's fonts from Culmus (+ the Schwarz Ari font).
 
-1. "Stam Siddur": Culmus Stam Ashkenaz with the fanned-out 3-tagin of שעטנ"ז ג"ץ replaced by three
-   straight, ball-topped tagin like the user's siddur (the single tagin of בד"ק ח"י ה are already straight).
+1. "Stam Siddur": Culmus Stam Ashkenaz with its tagin redrawn like the user's siddur — hair-thin
+   straight stems with large round balls: three on שעטנ"ז ג"ץ (middle one tallest), one on בד"ק י"ה,
+   and ח rebuilt as two ז halves joined by a pointed peak with one tag, as the siddur draws it.
 2. Nikud for the STAM fonts: Frank Ruehl CLM's vowel glyphs are copied in and GPOS mark positioning
    is rebuilt — each Frank anchor is mapped onto the matching STAM letter by bounding box.
 3. Every font gets three private-use pieces of ה for the siddur's stretched ה in שם הוי"ה:
@@ -24,7 +25,9 @@ import pathops
 MARKS = [*range(0x05B0, 0x05BE), 0x05BF, 0x05C1, 0x05C2, 0x05C4, 0x05C5, 0x05C7]
 SPACING = [0x05BE, 0x05C3, 0x05F3, 0x05F4]
 BASES = [*range(0x05D0, 0x05EB), *range(0xFB1D, 0xFB50)]
+# תגים: 3 on שעטנ"ז ג"ץ, 1 on בדק חיה, none on מלאכת סופר
 TRIPLE_TAGIN = 'שעטנןזגצץ'
+SINGLE_TAG = 'בדקיה'
 OUT = Path(__file__).resolve().parent.parent / 'fonts'
 UNICODES = [*range(0x20, 0x7F), 0xA0, *range(0x05B0, 0x05C8), *range(0x05D0, 0x05F5), *range(0x2010, 0x2028),
             0x25CC, *range(0xFB1D, 0xFB50), 0xE000, 0xE001, 0xE002]
@@ -97,16 +100,41 @@ def straight_tagin(T):
     cm = T.getBestCmap()
     upm = T['head'].unitsPerEm
     body_top = bounds(T, cm[ord('כ')])[3]            # כ has no tagin: its top is the letters' top line
-    cut = body_top + 0.012 * upm
-    stem_w, ball_r = 0.022 * upm, 0.031 * upm
-    outer_h, middle_h = 0.15 * upm, 0.19 * upm
+    cut = body_top                                  # heads cut flat at the letter line, like the siddur's
+    # proportions measured from photos of the siddur (letter body ≈ 0.52 em)
+    stem_w, ball_r = 0.015 * upm, 0.036 * upm
+    outer_h, middle_h = 0.128 * upm, 0.19 * upm
     spacing = 0.066 * upm
 
     def tag(x, h):
         stem = rect(x - stem_w / 2, body_top - 0.02 * upm, x + stem_w / 2, body_top + h)
         return op(stem, circle(x, body_top + h + ball_r * 0.6, ball_r), pathops.PathOp.UNION)
 
-    for ch in TRIPLE_TAGIN:
+    # ח as in the siddur: two ז halves joined by a pointed peak, one tag on the left half
+    zayin, chet = cm[ord('ז')], cm[ord('ח')]
+    z = glyph_path(T, zayin)
+    zx0, zy0, zx1, zy1 = z.bounds
+    z = op(z, rect(zx0 - 10, zy0 - 10, zx1 + 10, cut), pathops.PathOp.INTERSECTION)
+    zx0, zy0, zx1, top = z.bounds
+    half, gap = zx1 - zx0, 0.45 * (zx1 - zx0)
+    lsb = bounds(T, chet)[0]
+    rsb = T['hmtx'][chet][0] - bounds(T, chet)[2]
+    halves = pathops.Path()
+    for x in (lsb, lsb + half + gap):
+        z.draw(TransformPen(halves.getPen(), (1, 0, 0, 1, x - zx0, 0)))
+    body_h = top - zy0
+    xl, xr = lsb + half, lsb + half + gap                   # inner edges of the two heads
+    xc, apex, base, th, reach = (xl + xr) / 2, top + 0.42 * body_h, top - 0.16 * body_h, 0.14 * upm, 0.55 * half
+    peak = pathops.Path()
+    pen = peak.getPen()
+    for i, pt in enumerate([(xl - reach, base), (xc, apex), (xr + reach, base), (xr + reach - th, base),
+                            (xc, apex - 1.6 * th), (xl - reach + th, base)]):
+        (pen.moveTo if i == 0 else pen.lineTo)(pt)
+    pen.closePath()
+    new = op(op(halves, peak, pathops.PathOp.UNION), tag(lsb + 0.4 * half, outer_h), pathops.PathOp.UNION)
+    set_glyph(T, chet, new, lsb + 2 * half + gap + rsb)
+
+    for ch in TRIPLE_TAGIN + SINGLE_TAG:
         name = cm[ord(ch)]
         g = glyph_path(T, name)
         x0, y0, x1, y1 = g.bounds
@@ -116,9 +144,12 @@ def straight_tagin(T):
         old = op(g, rect(x0 - 10, cut, x1 + 10, y1 + 10), pathops.PathOp.INTERSECTION)
         centres = sorted((b.bounds[0] + b.bounds[2]) / 2 for b in components(old))
         new = body
-        cx = sum(centres) / len(centres)
-        for dx, h in ((-spacing, outer_h), (0, middle_h), (spacing, outer_h)):
-            new = op(new, tag(cx + dx, h), pathops.PathOp.UNION)
+        if ch in SINGLE_TAG:
+            new = op(new, tag(centres[0], outer_h), pathops.PathOp.UNION)
+        else:
+            cx = sum(centres) / len(centres)
+            for dx, h in ((-spacing, outer_h), (0, middle_h), (spacing, outer_h)):
+                new = op(new, tag(cx + dx, h), pathops.PathOp.UNION)
         set_glyph(T, name, new, T['hmtx'][name][0])
 
 

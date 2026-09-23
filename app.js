@@ -60,8 +60,9 @@ function kavanah(tag, text, src, f, dow) {
 
 function test(w, f) { return !w || (w[0] === '!' ? !f[w.slice(1)] : !!f[w]); }
 
-// שם הוי"ה as printed in the siddur: יְהֹוָ + a stretched ה (font pieces U+E000–E002) with אדני inside
-const NAME = 'יְהֹוָה';
+// שם הוי"ה as printed in the siddur: יהו + a stretched ה (font pieces U+E000–E002) with אדני inside.
+// Matches every vowelling of the Name (יְהֹוָה, and the יהוָה of לַיהוָה / בַּיהוָה); the final ה is unvowelled.
+const NAME = /(י[\u0591-\u05C7]*ה[\u0591-\u05C7]*ו[\u0591-\u05C7]*)ה(?![\u0591-\u05C7])/g;
 function stretchedHe() {
   const he = document.createElement('span'); he.className = 'nm-he';
   const right = document.createElement('span'); right.textContent = '\uE000';
@@ -73,18 +74,21 @@ function stretchedHe() {
   return he;
 }
 function withName(str, into) {
-  str.split(NAME).forEach((piece, i) => {
-    if (i) {
-      const name = document.createElement('span'); name.className = 'nm';   // kept on one line
-      name.append('יְהֹוָ', stretchedHe()); into.append(name);
-    }
-    if (piece) into.append(piece);
-  });
+  let at = 0;
+  for (const m of str.matchAll(NAME)) {
+    if (m.index > at) into.append(str.slice(at, m.index));
+    const name = document.createElement('span'); name.className = 'nm';     // kept on one line
+    name.append(m[1], stretchedHe()); into.append(name);
+    at = m.index + m[0].length;
+  }
+  if (at < str.length) into.append(str.slice(at));
 }
 
 // "⟦פּ⟧וֹתֵֽ⟦חַ⟧" → enlarged letters (each ⟦…⟧ keeps a letter together with its vowels)
 function withBigLetters(str) {
-  if (!str.includes('⟦') && !str.includes(NAME)) return document.createTextNode(str);
+  NAME.lastIndex = 0;
+  if (!str.includes('⟦') && !NAME.test(str)) return document.createTextNode(str);
+  NAME.lastIndex = 0;
   const wrap = document.createElement('span');
   str.split(/(⟦[^⟧]*⟧)/).forEach(piece => {
     if (!piece.startsWith('⟦')) { withName(piece, wrap); return; }
