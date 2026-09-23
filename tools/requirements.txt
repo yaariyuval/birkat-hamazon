@@ -1,2 +1,7 @@
 fonttools[woff]>=4.60
 skia-pathops>=0.9
+numpy
+scipy
+scikit-image
+pillow
+potracer

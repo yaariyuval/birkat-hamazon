@@ -1,9 +1,7 @@
 """Build the app's fonts from Culmus (+ the Schwarz Ari font).
 
-1. "Stam Siddur": Culmus Stam Ashkenaz with its tagin redrawn like the user's siddur — hair-thin
-   straight stems with large round balls: three on שעטנ"ז ג"ץ (middle one tallest), one on בד"ק י"ה,
-   ח rebuilt as two ז halves joined by a pointed peak with one tag, and ל redrawn with the siddur's
-   short neck and curved tail (all traced from photos of the siddur).
+1. "Stam Siddur": every letter traced from photos of the user's siddur, tagin included
+   (tools/trace/trace.py → tools/trace/glyphs.json), on Stam Ashkenaz CLM's metrics.
 2. Nikud for the STAM fonts: Frank Ruehl CLM's vowel glyphs are copied in and GPOS mark positioning
    is rebuilt — each Frank anchor is mapped onto the matching STAM letter by bounding box.
 3. Every font gets three private-use pieces of ה for the siddur's stretched ה in שם הוי"ה:
@@ -26,9 +24,6 @@ import pathops
 MARKS = [*range(0x05B0, 0x05BE), 0x05BF, 0x05C1, 0x05C2, 0x05C4, 0x05C5, 0x05C7]
 SPACING = [0x05BE, 0x05C3, 0x05F3, 0x05F4]
 BASES = [*range(0x05D0, 0x05EB), *range(0xFB1D, 0xFB50)]
-# תגים: 3 on שעטנ"ז ג"ץ, 1 on בדק חיה, none on מלאכת סופר
-TRIPLE_TAGIN = 'שעטנןזגצץ'
-SINGLE_TAG = 'בדקיה'
 OUT = Path(__file__).resolve().parent.parent / 'fonts'
 UNICODES = [*range(0x20, 0x7F), 0xA0, *range(0x05B0, 0x05C8), *range(0x05D0, 0x05F5), *range(0x2010, 0x2028),
             0x25CC, *range(0xFB1D, 0xFB50), 0xE000, 0xE001, 0xE002]
@@ -52,19 +47,6 @@ def rect(x0, y0, x1, y1):
     p = pathops.Path()
     pen = p.getPen()
     pen.moveTo((x0, y0)); pen.lineTo((x1, y0)); pen.lineTo((x1, y1)); pen.lineTo((x0, y1)); pen.closePath()
-    return p
-
-
-def circle(cx, cy, r):
-    k = 0.5523 * r
-    p = pathops.Path()
-    pen = p.getPen()
-    pen.moveTo((cx + r, cy))
-    pen.curveTo((cx + r, cy + k), (cx + k, cy + r), (cx, cy + r))
-    pen.curveTo((cx - k, cy + r), (cx - r, cy + k), (cx - r, cy))
-    pen.curveTo((cx - r, cy - k), (cx - k, cy - r), (cx, cy - r))
-    pen.curveTo((cx + k, cy - r), (cx + r, cy - k), (cx + r, cy))
-    pen.closePath()
     return p
 
 
@@ -96,135 +78,55 @@ def set_glyph(font, name, path, advance, dx=0):
     font['hmtx'][name] = (round(advance), getattr(glyf[name], 'xMin', 0))
 
 
-def smooth_path(points, closed=True):
-    """A closed outline through `points` (Catmull-Rom → cubic Béziers); points marked with a
-    trailing True are corners (straight in and out)."""
-    pts = [(p[0], p[1]) for p in points]
-    corner = [len(p) > 2 and p[2] for p in points]
-    n = len(pts)
-    path = pathops.Path()
-    pen = path.getPen()
-    pen.moveTo(pts[0])
-    for i in range(n):
-        p0, p1, p2, p3 = pts[i - 1], pts[i], pts[(i + 1) % n], pts[(i + 2) % n]
-        if corner[i] or corner[(i + 1) % n]:
-            pen.lineTo(p2)
-            continue
-        c1 = (p1[0] + (p2[0] - p0[0]) / 6, p1[1] + (p2[1] - p0[1]) / 6)
-        c2 = (p2[0] - (p3[0] - p1[0]) / 6, p2[1] - (p3[1] - p1[1]) / 6)
-        pen.curveTo(c1, c2, p2)
-    pen.closePath()
-    return path
-
-
-def siddur_lamed(T, body_top):
-    """ל as the siddur draws it: a thick top bar whose right end curves down into a tail that
-    sweeps down-left to a point on the baseline, and a short thin neck with a block head.
-    Coordinates traced from a photo (letter body = 1050 units high)."""
-    k = body_top / 1050
-    P = lambda *pts: [(x * k, y * k, *c) for x, y, *c in pts]
-    bar = rect(201 * k, 799 * k, 900 * k, body_top)
-    neck = rect(197 * k, body_top - 20, 272 * k, 1440 * k)
-    head = smooth_path(P((60, 1677, True), (101, 1732, True), (311, 1640, True), (311, 1426, True),
-                         (195, 1410, True), (60, 1448, True)))
-    # right end of the bar with a rounded shoulder, dropping nearly straight, then sweeping left to a point
-    tail = smooth_path(P((780, 1050, True), (930, 1048), (995, 1000), (1010, 900), (1005, 760), (975, 600),
-                         (915, 440), (820, 290), (690, 140), (499, -6, True),
-                         (575, 150), (665, 310), (730, 480), (765, 640), (781, 799, True)))
-    g = bar
-    for part in (neck, head, tail):
-        g = op(g, part, pathops.PathOp.UNION)
-    name = T.getBestCmap()[ord('ל')]
-    set_glyph(T, name, g, 1070 * k)
-
-
-# ── 1. straight, ball-topped tagin ──
-def straight_tagin(T):
+def traced_letters(T, glyphs_json):
+    """Replace the letters with outlines traced from the siddur (tools/trace/glyphs.json: baseline 0,
+    letter body 1000 high), scaled to this font's letter height. ף, which the photos lack, is built
+    from the traced פ and the tail of ן. Sets T.dagesh_at for the letters whose dagesh sits beside
+    the stem (ו, ז), as the siddur prints it."""
+    import json
+    glyphs = json.loads(Path(glyphs_json).read_text())
     cm = T.getBestCmap()
-    upm = T['head'].unitsPerEm
-    body_top = bounds(T, cm[ord('כ')])[3]            # כ has no tagin: its top is the letters' top line
-    cut = body_top                                  # heads cut flat at the letter line, like the siddur's
-    # proportions measured from photos of the siddur (letter body ≈ 0.52 em)
-    stem_w, ball_r = 0.015 * upm, 0.029 * upm
-    outer_h, middle_h = 0.118 * upm, 0.205 * upm
-    spacing = 0.074 * upm
-    head_w, head_h = 0.2 * upm, 0.15 * upm           # the siddur's square head blocks
+    k = bounds(T, cm[ord('כ')])[3] / 1000             # this font's letter height / traced letter height
+    bt = 1000 * k
+    side = 0.055 * bt                                # side bearing (the siddur sets letters close)
+    paths = {}
+    for ch, contours in glyphs.items():
+        p = pathops.Path()
+        pen = p.getPen()
+        for c in contours:
+            for op_, *pts in c:
+                pts = [(x * k, y * k) for x, y in pts]
+                if op_ == 'M':
+                    pen.moveTo(pts[0])
+                elif op_ == 'L':
+                    pen.lineTo(pts[0])
+                else:
+                    pen.curveTo(*pts)
+            pen.closePath()
+        paths[ch] = pathops.simplify(p, fix_winding=True, keep_starting_points=False)
 
-    def tag(x, h, lean=0.0):
-        # a thin stem from the head up to a round ball; `lean` shifts the top sideways (outer stems)
-        stem = pathops.Path()
-        pen = stem.getPen()
-        b, t = body_top - 0.02 * upm, body_top + h
-        pen.moveTo((x - stem_w / 2, b)); pen.lineTo((x + stem_w / 2, b))
-        pen.lineTo((x + lean + stem_w / 2, t)); pen.lineTo((x + lean - stem_w / 2, t)); pen.closePath()
-        return op(stem, circle(x + lean * 1.08, body_top + h + ball_r * 0.6, ball_r), pathops.PathOp.UNION)
+    # ף: the head of פ (above a third of the body) + the descending tail of ן, right edges aligned
+    pe, nun = paths['פ'], paths['ן']
+    px0, py0, px1, py1 = pe.bounds
+    head = op(pe, rect(px0 - 10, 0.33 * bt, px1 + 10, py1 + 10), pathops.PathOp.INTERSECTION)
+    nx0, ny0, nx1, ny1 = nun.bounds
+    tail = op(nun, rect(nx0 - 10, ny0 - 10, nx1 + 10, 0.5 * bt), pathops.PathOp.INTERSECTION)
+    moved = pathops.Path()
+    tail.draw(TransformPen(moved.getPen(), (1, 0, 0, 1, px1 - nx1, 0)))
+    paths['ף'] = op(head, moved, pathops.PathOp.UNION)
 
-    # ז as in the siddur: a square head block over a diamond-shaped leg that tapers to a point
-    zayin, chet = cm[ord('ז')], cm[ord('ח')]
-    zb = bounds(T, zayin)
-    zc = (zb[0] + zb[2]) / 2
-    leg_w = 0.47 * head_w
-    hb = body_top - head_h                           # bottom of the head
-    leg = smooth_path([(zc - 0.12 * head_w, hb + 20, True), (zc + 0.12 * head_w, hb + 20, True),
-                       (zc + leg_w / 2, hb - 0.28 * hb), (zc + 0.05 * head_w, 0.12 * hb), (zc, -0.02 * hb, True),
-                       (zc - 0.05 * head_w, 0.12 * hb), (zc - leg_w / 2, hb - 0.28 * hb)])
-    set_glyph(T, zayin, op(rect(zc - head_w / 2, hb, zc + head_w / 2, body_top), leg, pathops.PathOp.UNION),
-              T['hmtx'][zayin][0])
-    # its dagesh sits just left of the leg, right under the head (a dot centre, used by add_nikud)
-    T.dagesh_at = {zayin: (zc - leg_w / 2 - 0.045 * upm, hb - 0.2 * hb)}
+    for ch, p in paths.items():
+        x0, y0, x1, y1 = p.bounds
+        set_glyph(T, cm[ord(ch)], p, x1 - x0 + 2 * side, dx=side - x0)
 
-    # ח as in the siddur: two ז halves joined by a pointed peak, one tag on the left half
-    z = glyph_path(T, zayin)
-    zx0, zy0, zx1, zy1 = z.bounds
-    z = op(z, rect(zx0 - 10, zy0 - 10, zx1 + 10, cut), pathops.PathOp.INTERSECTION)
-    zx0, zy0, zx1, top = z.bounds
-    half, gap = zx1 - zx0, 0.45 * (zx1 - zx0)
-    lsb = bounds(T, chet)[0]
-    rsb = T['hmtx'][chet][0] - bounds(T, chet)[2]
-    halves = pathops.Path()
-    for x in (lsb, lsb + half + gap):
-        z.draw(TransformPen(halves.getPen(), (1, 0, 0, 1, x - zx0, 0)))
-    body_h = top - zy0
-    xl, xr = lsb + half, lsb + half + gap                   # inner edges of the two heads
-    xc, apex, base, th, reach = (xl + xr) / 2, top + 0.42 * body_h, top - 0.16 * body_h, 0.14 * upm, 0.55 * half
-    peak = pathops.Path()
-    pen = peak.getPen()
-    for i, pt in enumerate([(xl - reach, base), (xc, apex), (xr + reach, base), (xr + reach - th, base),
-                            (xc, apex - 1.6 * th), (xl - reach + th, base)]):
-        (pen.moveTo if i == 0 else pen.lineTo)(pt)
-    pen.closePath()
-    new = op(op(halves, peak, pathops.PathOp.UNION), tag(lsb + 0.4 * half, outer_h), pathops.PathOp.UNION)
-    set_glyph(T, chet, new, lsb + 2 * half + gap + rsb)
-
-    siddur_lamed(T, body_top)
-
-    for ch in TRIPLE_TAGIN + SINGLE_TAG:
+    # dagesh beside the stem of ו (the shuruk) and ז, at the siddur's height
+    T.dagesh_at = {}
+    for ch, h in (('ו', 0.45), ('ז', 0.6)):
         name = cm[ord(ch)]
-        g = glyph_path(T, name)
-        x0, y0, x1, y1 = g.bounds
-        if y1 <= cut and ch not in TRIPLE_TAGIN:
-            continue
-        body = op(g, rect(x0 - 10, y0 - 10, x1 + 10, cut), pathops.PathOp.INTERSECTION)
-        old = op(g, rect(x0 - 10, cut, x1 + 10, y1 + 10), pathops.PathOp.INTERSECTION) if y1 > cut else pathops.Path()
-        centres = sorted((b.bounds[0] + b.bounds[2]) / 2 for b in components(old)) or [(x0 + x1) / 2]
-        new = body
-        if ch in SINGLE_TAG:
-            new = op(new, tag(centres[0], outer_h), pathops.PathOp.UNION)
-        else:
-            # centre the cluster on the head it stands on, widening that head into a square block
-            # when it is narrower than the cluster (the siddur's heads are wide square blocks)
-            guess = sum(centres) / len(centres)
-            heads = components(op(body, rect(x0 - 10, body_top - 0.04 * upm, x1 + 10, cut + 1),
-                                  pathops.PathOp.INTERSECTION))
-            hd = min(heads, key=lambda h: abs((h.bounds[0] + h.bounds[2]) / 2 - guess)).bounds
-            cx = (hd[0] + hd[2]) / 2
-            if hd[2] - hd[0] < head_w:
-                new = op(new, rect(cx - head_w / 2, body_top - head_h, cx + head_w / 2, body_top),
-                         pathops.PathOp.UNION)
-            lean = 0.018 * upm                        # outer stems lean out slightly, as printed
-            for dx, h, ln in ((-spacing, outer_h, -lean), (0, middle_h, 0), (spacing, outer_h, lean)):
-                new = op(new, tag(cx + dx, h, ln), pathops.PathOp.UNION)
-        set_glyph(T, name, new, T['hmtx'][name][0])
+        row = op(glyph_path(T, name), rect(-10000, h * bt - 2, 10000, h * bt + 2), pathops.PathOp.INTERSECTION)
+        T.dagesh_at[name] = (row.bounds[0] - 0.09 * bt, h * bt)
+    if 'GSUB' in T:                                  # no substitution back to the old letter shapes
+        del T['GSUB']
 
 
 # ── dagesh placement: the centre of the letter's largest open area (as the siddur prints it) ──
@@ -322,11 +224,19 @@ def frank_anchors(F):
     return out
 
 
-def add_nikud(T, F):
+def add_nikud(T, F, cap=False):
+    """`cap`: measure letters only up to the head line, so marks ignore the tagin (traced letters)."""
     fcmap, tcmap = F.getBestCmap(), T.getBestCmap()
     lookups = frank_anchors(F)
+    body_top = bounds(T, tcmap[ord('כ')])[3]
     fb, tb = bounds(F, fcmap[0x05D4]), bounds(T, tcmap[0x05D4])
-    s = (tb[3] - tb[1]) / (fb[3] - fb[1])           # global scale: STAM ה height / Frank ה height
+    s = ((body_top if cap else tb[3]) - tb[1]) / (fb[3] - fb[1])   # scale: STAM ה height / Frank ה height
+
+    def box(name, cp):
+        b = bounds(T, name)
+        if b and cap and chr(cp) not in 'ל':
+            b = (b[0], b[1], b[2], min(b[3], body_top))
+        return b
 
     # the first MarkBase lookup that positions each of Frank's default mark glyphs
     mark_lookup = {}
@@ -383,7 +293,6 @@ def add_nikud(T, F):
     di = mark_lookup.pop(0x05BC)
     dmx, dmy = (v * s for v in lookups[di]['marks'][fcmap[0x05BC]])
     fea.append(f'markClass [{mark_names[0x05BC]}] <anchor {round(dc[0])} {round(dc[1])}> @DAGESH;')
-    body_top = bounds(T, tcmap[ord('כ')])[3]
     base_names = set()
     fea.append('feature mark {')
     for i in sorted(set(mark_lookup.values())):
@@ -398,7 +307,7 @@ def add_nikud(T, F):
                 fname = fcmap.get(int(dec[0], 16)) if dec else None
             if fname not in lookups[i]['bases']:
                 continue
-            tbox = bounds(T, tname)
+            tbox = box(tname, cp)
             if tbox is None:
                 continue
             x, y = map_anchor(*lookups[i]['bases'][fname], bounds(F, fname), tbox)
@@ -417,7 +326,7 @@ def add_nikud(T, F):
         if pt is None:
             if fname not in lookups[di]['bases']:
                 continue
-            x, y = map_anchor(*lookups[di]['bases'][fname], bounds(F, fname), bounds(T, tname))
+            x, y = map_anchor(*lookups[di]['bases'][fname], bounds(F, fname), box(tname, cp))
             pt = (x + dc[0] - dmx, y + dc[1] - dmy)
         fea.append(f'    pos base [{tname}] <anchor {round(pt[0])} {round(pt[1])}> mark @DAGESH;')
         base_names.add(tname)
@@ -432,7 +341,7 @@ def add_nikud(T, F):
         fea.append(f'  lookup D{cp:X} {{')
         for base in (0x05E9, 0xFB49):
             tname = tcmap.get(base)
-            tbox = tname and bounds(T, tname)
+            tbox = tname and box(tname, base)
             if not tbox:
                 continue
             top = tbox[3]
@@ -459,8 +368,11 @@ def add_he_pieces(T):
     leg = min(components(g), key=lambda p: (p.bounds[2] - p.bounds[0]) * (p.bounds[3] - p.bounds[1]))
     cut = leg.bounds[2] + 0.05 * (x1 - x0)           # just right of the left leg: only roof above it
     upm = T['head'].unitsPerEm
-    # the roof's band, measured over a stretch right of the cut (a single slice can catch a dip)
-    bb, bt = op(g, rect(cut, y0 - 10, cut + 0.25 * (x1 - x0), y1 + 10), pathops.PathOp.INTERSECTION).bounds[1::2]
+    # the roof's band: the ink in a slice through the middle of the roof (clear of the leg and tag)
+    xm = (cut + x1) / 2
+    bb, bt = op(g, rect(xm - 0.05 * (x1 - x0), y0 - 10, xm + 0.05 * (x1 - x0), y1 + 10),
+                pathops.PathOp.INTERSECTION).bounds[1::2]
+    bb = max(bb, bt - 0.2 * (y1 - y0))               # (the right stem hangs below the roof there)
     ov = 0.02 * upm                                  # the ends overlap the extension: no visible joins
     right = op(op(g, rect(cut, y0 - 10, x1 + 10, y1 + 10), pathops.PathOp.INTERSECTION),
                rect(cut - ov, bb, cut, bt), pathops.PathOp.UNION)
@@ -530,8 +442,9 @@ if __name__ == '__main__':
     culmus, ari = Path(sys.argv[1]), sys.argv[2]
     F = TTFont(culmus / 'FrankRuehlCLM-Medium.otf')
 
-    T = TTFont(culmus / 'StamAshkenazCLM.ttf')
-    straight_tagin(T); add_nikud(T, F); add_he_pieces(T)
+    T = TTFont(culmus / 'StamAshkenazCLM.ttf')        # metrics donor; every letter is replaced
+    traced_letters(T, Path(__file__).parent / 'trace' / 'glyphs.json')
+    add_nikud(T, F, cap=True); add_he_pieces(T)
     save(T, 'StamSiddur-nikud.woff2', 'Stam Siddur Nikud')
 
     for src, out, family in ((culmus / 'StamSefaradCLM.ttf', 'StamSefarad-nikud.woff2', 'Stam Sefarad Nikud'),
