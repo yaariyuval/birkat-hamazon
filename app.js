@@ -4,13 +4,14 @@ import { dayInfo, flags, halachicCivilDate, formatHebrew, MANUAL_DAYS } from './
 // ── persisted settings (per device; the page works without storage) ──
 const DEFAULTS = {
   zimun: 'none', ten: false, meal: 'none', guest: false, lshem: true, kavanot: false,
-  font: 'sefarad', theme: 'auto', size: 26, showAll: false,
+  font: 'siddur', theme: 'auto', size: 26, showAll: false,
   walled: false, diaspora: false,
   loc: { lat: 31.778, lon: 35.235 },         // Jerusalem until the user shares a location
   override: null,                             // { key: 'YYYY-M-D', mode }
 };
 const load = () => { try { return { ...DEFAULTS, ...JSON.parse(localStorage.getItem('bhm') || '{}') }; } catch { return { ...DEFAULTS }; } };
 const S = load();
+if (!S.fontV) { S.font = 'siddur'; S.fontV = 3; }            // move everyone to the siddur-style font once
 const save = () => { try { localStorage.setItem('bhm', JSON.stringify(S)); } catch {} };
 
 const $ = id => document.getElementById(id);
@@ -59,15 +60,37 @@ function kavanah(tag, text, src, f, dow) {
 
 function test(w, f) { return !w || (w[0] === '!' ? !f[w.slice(1)] : !!f[w]); }
 
+// שם הוי"ה as printed in the siddur: יְהֹוָ + a stretched ה (font pieces U+E000–E002) with אדני inside
+const NAME = 'יְהֹוָה';
+function stretchedHe() {
+  const he = document.createElement('span'); he.className = 'nm-he';
+  const right = document.createElement('span'); right.textContent = '\uE000';
+  const mid = document.createElement('span'); mid.className = 'nm-mid';
+  const roof = document.createElement('span'); roof.className = 'nm-roof'; roof.textContent = '\uE002'.repeat(24);
+  const adni = document.createElement('span'); adni.className = 'nm-adni'; adni.textContent = 'אדני';
+  const left = document.createElement('span'); left.textContent = '\uE001';
+  mid.append(roof, adni); he.append(right, mid, left);
+  return he;
+}
+function withName(str, into) {
+  str.split(NAME).forEach((piece, i) => {
+    if (i) {
+      const name = document.createElement('span'); name.className = 'nm';   // kept on one line
+      name.append('יְהֹוָ', stretchedHe()); into.append(name);
+    }
+    if (piece) into.append(piece);
+  });
+}
+
 // "⟦פּ⟧וֹתֵֽ⟦חַ⟧" → enlarged letters (each ⟦…⟧ keeps a letter together with its vowels)
 function withBigLetters(str) {
-  if (!str.includes('⟦')) return document.createTextNode(str);
-  const frag = document.createDocumentFragment();
+  if (!str.includes('⟦') && !str.includes(NAME)) return document.createTextNode(str);
+  const wrap = document.createElement('span');
   str.split(/(⟦[^⟧]*⟧)/).forEach(piece => {
-    if (!piece.startsWith('⟦')) { frag.append(piece); return; }
-    const b = document.createElement('span'); b.className = 'big'; b.textContent = piece.slice(1, -1); frag.append(b);
+    if (!piece.startsWith('⟦')) { withName(piece, wrap); return; }
+    const b = document.createElement('span'); b.className = 'big'; b.textContent = piece.slice(1, -1); wrap.append(b);
   });
-  const wrap = document.createElement('span'); wrap.append(frag); return wrap;
+  return wrap;
 }
 
 function renderLine(line, f) {
