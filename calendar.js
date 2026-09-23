@@ -107,6 +107,8 @@ export function flags(info, settings) {
   f.forgot = f.shabbat || f.rc || f.moed;
 
   f.lshem = settings.lshem;
+  f.kav = !!settings.kavanot;
+  f.dow = info.h?.dow;
   f.zimun = settings.zimun !== 'none';
   f.zimun_main = settings.zimun === 'main';
   f.zimun_alt = settings.zimun === 'alt';

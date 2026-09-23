@@ -3,7 +3,7 @@ import { dayInfo, flags, halachicCivilDate, formatHebrew, MANUAL_DAYS } from './
 
 // ── persisted settings (per device; the page works without storage) ──
 const DEFAULTS = {
-  zimun: 'none', ten: false, meal: 'none', guest: false, lshem: true,
+  zimun: 'none', ten: false, meal: 'none', guest: false, lshem: true, kavanot: false,
   font: 'sefarad', theme: 'auto', size: 26, showAll: false,
   walled: false, diaspora: false,
   loc: { lat: 31.778, lon: 35.235 },         // Jerusalem until the user shares a location
@@ -38,6 +38,25 @@ function dayChips(info) {
 }
 
 // ── rendering ──
+const heb = t => t.replace(/"/g, '״').replace(/'/g, '׳');          // gershayim / geresh
+// שם א"ל for the end of ברכה ג׳ by weekday (פרי עץ חיים, שער השבת כד מט)
+const EL_BY_DOW = ['א"ל שד"י', 'א"ל הוי"ה', 'א"ל אדנ"י', 'א"ל אדנ"י', 'א"ל הוי"ה', 'א"ל שד"י'];
+const DAY_NAMES = ['א׳', 'ב׳', 'ג׳', 'ד׳', 'ה׳', 'ו׳'];
+
+function kavanah(tag, text, src, f, dow) {
+  const el = document.createElement(tag);
+  el.className = tag === 'p' ? 'kav-block' : 'kav';
+  el.append(heb(text));
+  if (dow && EL_BY_DOW[f.dow]) {
+    const today = document.createElement('b');
+    today.className = 'kav-today';
+    today.textContent = `היום (יום ${DAY_NAMES[f.dow]}): ${heb(EL_BY_DOW[f.dow])}`;
+    el.append(' ', today);
+  }
+  const cite = document.createElement('cite'); cite.textContent = src; el.append(' ', cite);
+  return el;
+}
+
 function test(w, f) { return !w || (w[0] === '!' ? !f[w.slice(1)] : !!f[w]); }
 
 function renderLine(line, f) {
@@ -46,6 +65,12 @@ function renderLine(line, f) {
   const bits = [];
   for (const p of parts) {
     if (typeof p === 'string') { bits.push(document.createTextNode(p)); continue; }
+    if (p.k) {
+      if (!f.kav || (!test(p.w, f) && !S.showAll)) continue;
+      const el = kavanah('span', p.k, p.src, f, p.dow);
+      if (!test(p.w, f)) el.classList.add('off');
+      bits.push(el); continue;
+    }
     if (p.lbl) {
       const l = document.createElement('span'); l.className = 'lbl'; l.textContent = p.lbl;
       if (!p.t) { bits.push(l); continue; }
@@ -78,8 +103,11 @@ function render() {
   for (const b of TEXT) {
     const on = test(b.w, f);
     if (!on && !S.showAll) continue;
+    if (b.type === 'kav' && !f.kav) continue;
     let el;
-    if (b.type === 'h') {
+    if (b.type === 'kav') {
+      el = kavanah('p', b.t, b.src, f);
+    } else if (b.type === 'h') {
       el = document.createElement('h2'); el.textContent = b.t;
     } else if (b.type === 'note') {
       el = document.createElement('p'); el.className = 'note'; el.textContent = b.t;
@@ -132,7 +160,7 @@ function openSettings() {
   $('alsoShabbatRow').hidden = !manual || S.override.mode === 'shabbat';
   $('autoHint').textContent = 'הבחירה הידנית תקפה עד סוף היום (השקיעה).';
   for (const id of ['zimun', 'meal', 'font', 'theme']) $(id).value = S[id];
-  for (const id of ['ten', 'guest', 'lshem', 'showAll', 'walled', 'diaspora']) $(id).checked = S[id];
+  for (const id of ['ten', 'guest', 'lshem', 'kavanot', 'showAll', 'walled', 'diaspora']) $(id).checked = S[id];
   $('settings').showModal();
 }
 
@@ -146,7 +174,7 @@ function bind() {
   };
   $('alsoShabbat').onchange = e => { if (S.override) { S.override.shabbat = e.target.checked; save(); render(); } };
   for (const id of ['zimun', 'meal', 'font', 'theme']) $(id).onchange = e => { S[id] = e.target.value; save(); applyLook(); render(); };
-  for (const id of ['ten', 'guest', 'lshem', 'showAll', 'walled', 'diaspora']) $(id).onchange = e => { S[id] = e.target.checked; save(); render(); };
+  for (const id of ['ten', 'guest', 'lshem', 'kavanot', 'showAll', 'walled', 'diaspora']) $(id).onchange = e => { S[id] = e.target.checked; save(); render(); };
   const resize = d => { S.size = Math.min(48, Math.max(16, S.size + d)); save(); applyLook(); };
   $('fontBtn').onclick = () => {
     const opts = [...$('font').options];

@@ -14,6 +14,7 @@
   --insert: #efe2c4;
   --rule: #d9c9a6;
   --chip: #e6d6b3;
+  --kav: #3d5a80;
   --shadow: 0 1px 0 rgb(0 0 0 / .04), 0 6px 24px rgb(60 40 10 / .12);
   --size: 26px;
   --text-font: 'Stam Sefarad', 'Frank Ruehl', serif;
@@ -23,12 +24,14 @@
   :root:not([data-theme="light"]) {
     --bg: #16120d; --paper: #1d1812; --ink: #eadfc8; --muted: #a8977a; --accent: #e0a064;
     --insert: #2a2118; --rule: #3a3024; --chip: #33291d; --shadow: 0 6px 24px rgb(0 0 0 / .5);
+    --kav: #93b4dc;
     color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
   --bg: #16120d; --paper: #1d1812; --ink: #eadfc8; --muted: #a8977a; --accent: #e0a064;
   --insert: #2a2118; --rule: #3a3024; --chip: #33291d; --shadow: 0 6px 24px rgb(0 0 0 / .5);
+  --kav: #93b4dc;
   color-scheme: dark;
 }
 :root[data-font="ashkenaz"] { --text-font: 'Stam Ashkenaz', 'Frank Ruehl', serif; }
@@ -103,6 +106,25 @@ button, select, input { font: inherit; color: inherit; }
 .opt-label { font-family: 'Frank Ruehl', serif; font-size: 13px; color: var(--accent); margin-inline-end: .25em; }
 .off { opacity: .38; }
 .text .zimun > span { margin-bottom: .2em; }
+
+/* ── כוונות האר״י ── */
+.kav, .kav-block {
+  font-family: 'Frank Ruehl', serif; font-size: 15px; line-height: 1.55;
+  color: var(--kav);
+}
+.kav {
+  display: inline; padding: .1em .4em; border-radius: 4px;
+  background: color-mix(in srgb, var(--kav) 10%, transparent);
+  -webkit-box-decoration-break: clone; box-decoration-break: clone;
+}
+.kav-block {
+  text-align: start;
+  margin: 0 0 .8em; padding-inline-start: .7em;
+  border-inline-start: 2px dotted var(--kav);
+}
+.kav cite, .kav-block cite { font-style: normal; font-size: 12px; opacity: .7; white-space: nowrap; }
+.kav cite::before, .kav-block cite::before { content: '— '; }
+.kav-today { font-weight: normal; padding: 0 .35em; border-radius: 3px; background: var(--kav); color: var(--paper); }
 
 details.forgot { margin: .2em 0 1em; font-size: .8em; color: var(--muted); }
 details.forgot summary { font-family: 'Frank Ruehl', serif; font-size: 15px; cursor: pointer; color: var(--accent); }

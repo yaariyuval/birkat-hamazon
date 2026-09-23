@@ -3,8 +3,8 @@
 import { readFileSync } from 'node:fs';
 import { TEXT } from '../text.js';
 
-let src = readFileSync(new URL('../source.wiki', import.meta.url), 'utf8') + '\n' +
-          readFileSync(new URL('../al-hanisim.wiki', import.meta.url), 'utf8');
+let src = readFileSync(new URL('../sources/wikisource-birkat-hamazon.wiki', import.meta.url), 'utf8') + '\n' +
+          readFileSync(new URL('../sources/wikisource-al-hanisim.wiki', import.meta.url), 'utf8');
 // resolve al-hanisim templates for נוסח מזרח
 src = src.replace(/\{\{נוא\|[^{}]*\}\}/g, '');
 for (let i = 0; i < 3; i++) src = src.replace(/\{\{נוסחי תפילה קצרים\|נוסח=\{\{\{נוסח\|\}\}\}((?:\|[^|{}]*(?:\{\{[^{}]*\}\})?[^|{}]*)*)\}\}/g, (_, args) => {
@@ -43,3 +43,23 @@ for (const s of strings) {
   if (!src.includes(n)) { bad++; console.log('✗', n.slice(0, 200)); }
 }
 console.log(`${strings.length} strings, ${bad} not verbatim`);
+
+// ── כוונות האר״י: every quote (split at " … ") must appear verbatim in sources/*.txt ──
+let kab = ['pri-etz-chaim-shabbat-24.txt', 'shaar-hamitzvot-eikev.txt', 'shaar-hakavanot-shacharit-14-17.txt']
+  .map(f => readFileSync(new URL('../sources/' + f, import.meta.url), 'utf8')).join('\n').replace(/\s+/g, ' ');
+// OCR slips in the 1872 Sha'ar HaMitzvot scan, fixed on purpose.
+const KAV_CORRECTIONS = [['ובהוית של התחלת הברכה הזו יכון', 'ובהוי"ה של התחלת הברכה הזו יכוין']];
+for (const [a, b] of KAV_CORRECTIONS) { if (!kab.includes(a)) console.log('kav correction not found:', a); kab = kab.split(a).join(b); }
+const kavs = [];
+const walkK = (x) => {
+  if (Array.isArray(x)) return x.forEach(walkK);
+  if (x && typeof x === 'object') {
+    if (x.type === 'kav') kavs.push(x.t);
+    if (x.k) kavs.push(x.k);
+    if (x.lines) walkK(x.lines);
+  }
+};
+walkK(TEXT);
+let kbad = 0;
+for (const k of kavs) for (const piece of k.split(' … ')) if (!kab.includes(norm(piece))) { kbad++; console.log('✗ kav', piece.slice(0, 120)); }
+console.log(`${kavs.length} kavanot, ${kbad} not verbatim`);
