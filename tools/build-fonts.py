@@ -78,6 +78,63 @@ def set_glyph(font, name, path, advance, dx=0):
     font['hmtx'][name] = (round(advance), getattr(glyf[name], 'xMin', 0))
 
 
+# תגים: three on שעטנ"ז ג"ץ (and ן), one on בדק חי"ה, none on מלאכת סופר.
+TRIPLE_TAGIN = 'שעטנזגצץן'
+SINGLE_TAG = 'בדקחיה'
+# Proportions measured on the traced letters (letter body = 1000): ball tops 470 (middle) and 320
+# (outer; single 300) above the head line, balls 145 across, thin straight parallel stems 150 apart.
+TAG = dict(mid=480, outer=370, single=300, ball=145, stem=30, spread=150, base_spread=1.0)
+
+
+def tag(x_base, x_ball, height, bt):
+    """One tag: a thin stem from inside the head up to a round ball (units scaled to body `bt`)."""
+    u = bt / 1000
+    r = TAG['ball'] * u / 2
+    cy = bt + height * u - r
+    w = TAG['stem'] * u / 2
+    stem = pathops.Path()
+    pen = stem.getPen()
+    b = bt - 40 * u
+    pen.moveTo((x_base - w, b)); pen.lineTo((x_base + w, b))
+    pen.lineTo((x_ball + w, cy)); pen.lineTo((x_ball - w, cy)); pen.closePath()
+    return op(stem, circle(x_ball, cy, r), pathops.PathOp.UNION)
+
+
+def clean_tagin(p, ch, bt):
+    """Replace the traced tagin (thin, often broken in the photos) with crisp ones at the same place."""
+    u = bt / 1000
+    x0, y0, x1, y1 = p.bounds
+    above = op(p, rect(x0 - 10, bt + 30 * u, x1 + 10, y1 + 10), pathops.PathOp.INTERSECTION)
+    comps = [c.bounds for c in components(above) if c.bounds[2] - c.bounds[0] < 200 * u]   # not ח's peak
+    if not comps:
+        return p
+    tallest = max(comps, key=lambda b: b[3])
+    cx = (tallest[0] + tallest[2]) / 2
+    if ch == 'ח':                                    # keep the peak: cut only around the tag
+        body = op(p, rect(cx - 110 * u, bt + 8 * u, cx + 110 * u, y1 + 10), pathops.PathOp.DIFFERENCE)
+    else:
+        body = op(p, rect(x0 - 10, y0 - 10, x1 + 10, bt + 8 * u), pathops.PathOp.INTERSECTION)
+    if ch in SINGLE_TAG:
+        return op(body, tag(cx, cx, TAG['single'], bt), pathops.PathOp.UNION)
+    sp, bs = TAG['spread'] * u, TAG['spread'] * TAG['base_spread'] * u
+    for dx, dxb, h in ((-sp, -bs, TAG['outer']), (0, 0, TAG['mid']), (sp, bs, TAG['outer'])):
+        body = op(body, tag(cx + dxb, cx + dx, h, bt), pathops.PathOp.UNION)
+    return body
+
+
+def circle(cx, cy, r):
+    k = 0.5523 * r
+    p = pathops.Path()
+    pen = p.getPen()
+    pen.moveTo((cx + r, cy))
+    pen.curveTo((cx + r, cy + k), (cx + k, cy + r), (cx, cy + r))
+    pen.curveTo((cx - k, cy + r), (cx - r, cy + k), (cx - r, cy))
+    pen.curveTo((cx - r, cy - k), (cx - k, cy - r), (cx, cy - r))
+    pen.curveTo((cx + k, cy - r), (cx + r, cy - k), (cx + r, cy))
+    pen.closePath()
+    return p
+
+
 def traced_letters(T, glyphs_json):
     """Replace the letters with outlines traced from the siddur (tools/trace/glyphs.json: baseline 0,
     letter body 1000 high), scaled to this font's letter height. ף, which the photos lack, is built
@@ -115,16 +172,23 @@ def traced_letters(T, glyphs_json):
     tail.draw(TransformPen(moved.getPen(), (1, 0, 0, 1, px1 - nx1, 0)))
     paths['ף'] = op(head, moved, pathops.PathOp.UNION)
 
+    for ch in TRIPLE_TAGIN + SINGLE_TAG:
+        paths[ch] = clean_tagin(paths[ch], ch, bt)
+
     for ch, p in paths.items():
         x0, y0, x1, y1 = p.bounds
         set_glyph(T, cm[ord(ch)], p, x1 - x0 + 2 * side, dx=side - x0)
 
     # dagesh beside the stem of ו (the shuruk) and ז, at the siddur's height
     T.dagesh_at = {}
-    for ch, h in (('ו', 0.45), ('ז', 0.6)):
+    for ch, h, gap in (('ו', 0.5, 0.15), ('ז', 0.6, 0.09)):
         name = cm[ord(ch)]
         row = op(glyph_path(T, name), rect(-10000, h * bt - 2, 10000, h * bt + 2), pathops.PathOp.INTERSECTION)
-        T.dagesh_at[name] = (row.bounds[0] - 0.09 * bt, h * bt)
+        T.dagesh_at[name] = (row.bounds[0] - gap * bt, h * bt)
+    # holam male (וֹ): the dot right above the ו's head, centred on it (dot centre, used by add_nikud)
+    vav = cm[ord('ו')]
+    head = op(glyph_path(T, vav), rect(-10000, 0.8 * bt, 10000, bt), pathops.PathOp.INTERSECTION).bounds
+    T.holam_at = {vav: ((head[0] + head[2]) / 2, 1.17 * bt)}
     if 'GSUB' in T:                                  # no substitution back to the old letter shapes
         del T['GSUB']
 
@@ -311,6 +375,12 @@ def add_nikud(T, F, cap=False):
             if tbox is None:
                 continue
             x, y = map_anchor(*lookups[i]['bases'][fname], bounds(F, fname), tbox)
+            if tname in getattr(T, 'holam_at', {}) and i == mark_lookup.get(0x05B9):
+                # put the holam dot's centre at the requested point
+                hb = bounds(T, mark_names[0x05B9])
+                mx, my = (v * s for v in lookups[i]['marks'][fcmap[0x05B9]])
+                px, py = T.holam_at[tname]
+                x, y = round(px - (hb[0] + hb[2]) / 2 + mx), round(py - (hb[1] + hb[3]) / 2 + my)
             fea.append(f'    pos base [{tname}] <anchor {x} {y}> mark @M{i};')
             base_names.add(tname)
         fea.append(f'  }} L{i};')
@@ -374,10 +444,12 @@ def add_he_pieces(T):
                 pathops.PathOp.INTERSECTION).bounds[1::2]
     bb = max(bb, bt - 0.2 * (y1 - y0))               # (the right stem hangs below the roof there)
     ov = 0.02 * upm                                  # the ends overlap the extension: no visible joins
+    # both ends get a straight run of the same roof band, so the joins with the bar are seamless
+    run = 0.2 * (x1 - x0)
     right = op(op(g, rect(cut, y0 - 10, x1 + 10, y1 + 10), pathops.PathOp.INTERSECTION),
-               rect(cut - ov, bb, cut, bt), pathops.PathOp.UNION)
+               rect(cut - ov, bb, cut + run, bt), pathops.PathOp.UNION)
     left = op(op(g, rect(x0 - 10, y0 - 10, cut, y1 + 10), pathops.PathOp.INTERSECTION),
-              rect(cut, bb, cut + ov, bt), pathops.PathOp.UNION)
+              rect(cut - run, bb, cut + ov, bt), pathops.PathOp.UNION)
     seg = 3 * upm                                    # one long piece, clipped to width by CSS: no seams
     set_glyph(T, 'he.right', right, adv - cut, dx=-cut)
     set_glyph(T, 'he.left', left, cut)

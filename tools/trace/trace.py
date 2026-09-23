@@ -64,15 +64,15 @@ def extract(g, lab, props, labels):
         ((X1 - X0) * UP, (Y1 - Y0) * UP), Image.LANCZOS), dtype=float) / 255
     bigmask = np.asarray(Image.fromarray(mask.astype(np.uint8) * 255).resize(big.shape[::-1], Image.NEAREST)) > 0
     from scipy.ndimage import gaussian_filter, binary_opening, binary_closing
-    big = gaussian_filter(big, sigma=0.005 * body * UP)          # smooth away paper grain
+    big = gaussian_filter(big, sigma=0.009 * body * UP)          # smooth away paper grain
     t = threshold_otsu(big[bigmask]) if bigmask.any() else threshold_otsu(big)
     ink = (big < t) & bigmask
-    ink = binary_closing(ink, iterations=2)
+    ink = binary_closing(binary_opening(ink, iterations=3), iterations=3)   # tagin are redrawn, so smooth freely
     return ink, (X0, Y0), base, body
 
 
-# letters that hang below the baseline, or (י) stop above it: their baseline comes from the line
-LINE_BASE = set('ךןץקףי')
+# letters that hang below the baseline (ע's tail dips a little), or (י) stop above it: their baseline comes from the line
+LINE_BASE = set('ךןץקףיע')
 # letters that rise above the top line (ל): their top comes from the line
 LINE_TOP = set('ל')
 NARROW = set('וזןינג')
@@ -109,7 +109,7 @@ def vectorise(ink, origin, base, body):
         x, y = (pt.x, pt.y) if hasattr(pt, "x") else pt
         return [round(x * s, 1), round((base - Y0) * 1000 / body - y * s, 1)]
     paths = potrace.Bitmap(~ink).trace(                  # potracer fills the False pixels
-        turdsize=200, alphamax=1.0, opticurve=True, opttolerance=0.6)
+        turdsize=300, alphamax=1.1, opticurve=True, opttolerance=0.8)
     out = []
     for curve in paths:
         segs = [['M', P(curve.start_point)]]
