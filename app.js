@@ -3,7 +3,7 @@ import { dayInfo, flags, halachicCivilDate, formatHebrew, MANUAL_DAYS } from './
 
 // ── persisted settings (per device; the page works without storage) ──
 const DEFAULTS = {
-  zimun: 'none', ten: false, meal: 'none', guest: false, lshem: true, kavanot: false,
+  zimun: 'none', ten: false, meal: 'none', guest: false, lshem: true, kavanot: false, names: true,
   font: 'siddur', theme: 'auto', size: 26, showAll: false,
   walled: false, diaspora: false,
   loc: { lat: 31.778, lon: 35.235 },         // Jerusalem until the user shares a location
@@ -73,21 +73,45 @@ function stretchedHe() {
   mid.append(roof, adni); he.append(right, mid, left);
   return he;
 }
+// The siddur's notes beside the names (שו״ע או״ח ה): after הוי״ה, and after every form of אלהים.
+const NIKUD = /[\u0591-\u05C7]/g;
+const ELOHIM = /^(?:[והבלכמש])?אלה(?:ים|ינו|יך|י)$/;
+function note(...lines) {
+  const a = document.createElement('span'); a.className = 'dn' + (lines.length > 1 ? ' two' : '');
+  lines.forEach((t, i) => { if (i) a.append(document.createElement('br')); a.append(t); });
+  return a;
+}
+const nameNotes = () => [note('יאהדונהי'), note('אדון הכל', 'היה הוה ויהיה')];
+const elohimNote = () => note('תקיף ובעל היכולת', 'ובעל הכוחות כולם');
+
+function withElohim(str, into) {
+  if (!S.names) { into.append(str); return; }
+  // split into words, keeping separators; a note follows each form of אלהים
+  for (const tok of str.split(/([\s־]+)/)) {
+    if (!tok) continue;
+    const letters = tok.replace(NIKUD, '').replace(/[^\u05D0-\u05EA]/g, '');
+    if (!ELOHIM.test(letters)) { into.append(tok); continue; }
+    const word = tok.match(/^[^,.:;!?"]*/)[0];
+    into.append(word, ' ', elohimNote(), tok.slice(word.length));
+  }
+}
+
 function withName(str, into) {
   let at = 0;
   for (const m of str.matchAll(NAME)) {
-    if (m.index > at) into.append(str.slice(at, m.index));
+    if (m.index > at) withElohim(str.slice(at, m.index), into);
     const name = document.createElement('span'); name.className = 'nm';     // kept on one line
     name.append(m[1], stretchedHe()); into.append(name);
+    if (S.names) into.append(' ', ...nameNotes().flatMap((n, i) => (i ? [' ', n] : [n])));
     at = m.index + m[0].length;
   }
-  if (at < str.length) into.append(str.slice(at));
+  if (at < str.length) withElohim(str.slice(at), into);
 }
 
 // "⟦פּ⟧וֹתֵֽ⟦חַ⟧" → enlarged letters (each ⟦…⟧ keeps a letter together with its vowels)
 function withBigLetters(str) {
   NAME.lastIndex = 0;
-  if (!str.includes('⟦') && !NAME.test(str)) return document.createTextNode(str);
+  if (!str.includes('⟦') && !NAME.test(str) && !(S.names && /אֱלֹה|אלֹה/.test(str))) return document.createTextNode(str);
   NAME.lastIndex = 0;
   const wrap = document.createElement('span');
   str.split(/(⟦[^⟧]*⟧)/).forEach(piece => {
@@ -209,7 +233,7 @@ function openSettings() {
   $('alsoShabbatRow').hidden = !manual || S.override.mode === 'shabbat';
   $('autoHint').textContent = 'הבחירה הידנית תקפה עד סוף היום (השקיעה).';
   for (const id of ['zimun', 'meal', 'font', 'theme']) $(id).value = S[id];
-  for (const id of ['ten', 'guest', 'lshem', 'kavanot', 'showAll', 'walled', 'diaspora']) $(id).checked = S[id];
+  for (const id of ['ten', 'guest', 'lshem', 'kavanot', 'names', 'showAll', 'walled', 'diaspora']) $(id).checked = S[id];
   $('settings').showModal();
 }
 
@@ -223,7 +247,7 @@ function bind() {
   };
   $('alsoShabbat').onchange = e => { if (S.override) { S.override.shabbat = e.target.checked; save(); render(); } };
   for (const id of ['zimun', 'meal', 'font', 'theme']) $(id).onchange = e => { S[id] = e.target.value; save(); applyLook(); render(); };
-  for (const id of ['ten', 'guest', 'lshem', 'kavanot', 'showAll', 'walled', 'diaspora']) $(id).onchange = e => { S[id] = e.target.checked; save(); render(); };
+  for (const id of ['ten', 'guest', 'lshem', 'kavanot', 'names', 'showAll', 'walled', 'diaspora']) $(id).onchange = e => { S[id] = e.target.checked; save(); render(); };
   const resize = d => { S.size = Math.min(48, Math.max(16, S.size + d)); save(); applyLook(); };
   $('fontBtn').onclick = () => {
     const opts = [...$('font').options];

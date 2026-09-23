@@ -117,14 +117,20 @@ button, select, input { font: inherit; color: inherit; }
 .nm-mid { display: inline-grid; align-items: baseline; }
 .nm-mid > * { grid-area: 1 / 1; }
 .nm-roof { overflow: hidden; white-space: nowrap; contain: inline-size; }
-.nm-adni {
-  font-family: 'Frank Ruehl', serif; font-size: .3em; line-height: 1;
-  padding: 0 .25em; position: relative; top: -.6em; color: inherit;
+.nm-adni {                                             /* bold, on the baseline, under the long roof */
+  font-family: 'Frank Ruehl', serif; font-weight: 700; font-size: .42em; line-height: 1;
+  padding: 0 .12em;
+}
+/* notes after the names: יאהדונהי in the text font at half size, two-line notes in small bold print */
+.dn { font-family: var(--text-font); font-size: .45em; line-height: 1; white-space: nowrap; }
+.dn.two {
+  display: inline-block; font-family: 'Frank Ruehl', serif; font-weight: 700;
+  font-size: .24em; line-height: 1.2; text-align: center;
 }
 
 /* small notes beside divine names (siddur's לשם יחוד) */
-.ann { font-family: 'Frank Ruehl', serif; font-size: 13px; line-height: 1.15; color: var(--muted); white-space: nowrap; }
-.ann.two { display: inline-block; vertical-align: middle; text-align: center; font-size: 11px; }
+.ann { font-family: 'Frank Ruehl', serif; font-weight: 700; font-size: .36em; line-height: 1.15; white-space: nowrap; }
+.ann.two { display: inline-block; text-align: center; font-size: .24em; }
 .ann.sup { vertical-align: super; font-size: 10px; }
 
 /* ── כוונות האר״י ── */
